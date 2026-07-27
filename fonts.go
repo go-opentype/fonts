@@ -5,30 +5,12 @@
 package fonts
 
 import (
-	_ "embed" // for the //go:embed directives below
+	_ "embed" // for the //go:embed directive below
 	"fmt"
 	"strings"
 
 	"github.com/go-opentype/opentype"
 )
-
-//go:embed ttf/AtkinsonHyperlegible-Regular.ttf
-var atkinsonHyperlegibleTTF []byte
-
-//go:embed ttf/Inter-Regular.ttf
-var interTTF []byte
-
-//go:embed ttf/Go-Regular.ttf
-var goRegularTTF []byte
-
-//go:embed ttf/Lora-Regular.ttf
-var loraTTF []byte
-
-//go:embed ttf/Go-Mono.ttf
-var goMonoTTF []byte
-
-//go:embed ttf/JetBrainsMono-Regular.ttf
-var jetBrainsMonoTTF []byte
 
 // Kind classifies a Family by its general letterform style.
 type Kind int
@@ -40,10 +22,13 @@ const (
 	KindSerif
 	// KindMono is a fixed-width (monospace) face.
 	KindMono
+	// KindDisplay is a face intended for headlines and short text at large
+	// sizes, rather than for body copy.
+	KindDisplay
 )
 
-// String returns the lower-case name of k ("sans", "serif", "mono"), or
-// "unknown" for any other value.
+// String returns the lower-case name of k ("sans", "serif", "mono",
+// "display"), or "unknown" for any other value.
 func (k Kind) String() string {
 	switch k {
 	case KindSans:
@@ -52,91 +37,86 @@ func (k Kind) String() string {
 		return "serif"
 	case KindMono:
 		return "mono"
+	case KindDisplay:
+		return "display"
 	default:
 		return "unknown"
 	}
 }
 
-// Family describes one bundled font: its display name, general style, the
-// SPDX identifier of the license it ships under, and its raw TrueType
-// bytes.
+// Family describes one bundled font by metadata only: its display name,
+// general style, the SPDX identifier of the license it ships under, and the
+// import path of the subpackage that embeds its bytes.
+//
+// Family deliberately has no []byte field. Enumerating [All] therefore does
+// not link any font into your binary — only importing a specific
+// subpackage (e.g. "github.com/go-opentype/fonts/inter") does that. This is
+// the "lazy at compile time" model: your binary links exactly the families
+// you import, nothing more.
 type Family struct {
-	Name    string // display name, e.g. "Atkinson Hyperlegible"
-	Kind    Kind
-	License string // SPDX identifier: "OFL-1.1" or "BSD-3-Clause"
-	TTF     []byte // raw .ttf file contents, ready for opentype.Parse
+	Name       string // display name, e.g. "Atkinson Hyperlegible"
+	Kind       Kind
+	License    string // SPDX identifier: "OFL-1.1" or "BSD-3-Clause"
+	ImportPath string // e.g. "github.com/go-opentype/fonts/inter"
 }
 
-// AtkinsonHyperlegible returns the raw TrueType bytes of Atkinson
-// Hyperlegible Regular, designed by the Braille Institute for maximum
-// legibility, including for low-vision readers. Licensed OFL-1.1.
-func AtkinsonHyperlegible() []byte { return atkinsonHyperlegibleTTF }
+// curated lists the families that have shipped since v0.1.0. Their
+// ImportPath subpackages are hand-maintained, not generator output.
+var curated = []Family{
+	{Name: "Atkinson Hyperlegible", Kind: KindSans, License: "OFL-1.1", ImportPath: "github.com/go-opentype/fonts/atkinsonhyperlegible"},
+	{Name: "Inter", Kind: KindSans, License: "OFL-1.1", ImportPath: "github.com/go-opentype/fonts/inter"},
+	{Name: "Go", Kind: KindSans, License: "BSD-3-Clause", ImportPath: "github.com/go-opentype/fonts/goregular"},
+	{Name: "Lora", Kind: KindSerif, License: "OFL-1.1", ImportPath: "github.com/go-opentype/fonts/lora"},
+	{Name: "Go Mono", Kind: KindMono, License: "BSD-3-Clause", ImportPath: "github.com/go-opentype/fonts/gomono"},
+	{Name: "JetBrains Mono", Kind: KindMono, License: "OFL-1.1", ImportPath: "github.com/go-opentype/fonts/jetbrainsmono"},
+}
 
-// Inter returns the raw TrueType bytes of Inter Regular, a UI sans-serif
-// designed for computer screens. Licensed OFL-1.1.
+// All returns every bundled Family, curated families first (in their
+// original order), followed by cmd/genfonts output, in a stable order.
 //
-// Inter is a variable font upstream; the bundled file is pinned at its
-// default master (static instance). go-opentype renders that default
-// instance only — variation axes are not applied.
-func Inter() []byte { return interTTF }
-
-// GoRegular returns the raw TrueType bytes of Go Regular, the Go project's
-// screen sans-serif designed by Bigelow & Holmes. Licensed BSD-3-Clause.
-func GoRegular() []byte { return goRegularTTF }
-
-// Lora returns the raw TrueType bytes of Lora Regular, a contemporary
-// serif with roots in calligraphy. Licensed OFL-1.1.
+// All returns metadata only — no font bytes. To use a family, import its
+// ImportPath and read its exported TTF variable, e.g.:
 //
-// Lora is a variable font upstream; the bundled file is pinned at its
-// default master (static instance). go-opentype renders that default
-// instance only — variation axes are not applied.
-func Lora() []byte { return loraTTF }
+//	import "github.com/go-opentype/fonts/inter"
+//	f, err := fonts.Parse(inter.TTF)
+func All() []Family {
+	all := make([]Family, 0, len(curated)+len(generated))
+	all = append(all, curated...)
+	all = append(all, generated...)
+	return all
+}
 
-// GoMono returns the raw TrueType bytes of Go Mono, the Go project's
-// monospace companion to Go Regular. Licensed BSD-3-Clause.
-func GoMono() []byte { return goMonoTTF }
+// ByName looks up a bundled family by its Family.Name, case-insensitively,
+// and returns its metadata. ok is false when no family matches. As with
+// All, this returns metadata only; fetch bytes via the returned
+// Family.ImportPath subpackage.
+func ByName(name string) (family Family, ok bool) {
+	for _, f := range All() {
+		if strings.EqualFold(f.Name, name) {
+			return f, true
+		}
+	}
+	return Family{}, false
+}
 
-// JetBrainsMono returns the raw TrueType bytes of JetBrains Mono Regular, a
-// monospace face designed for code. Licensed OFL-1.1.
-//
-// JetBrains Mono is a variable font upstream; the bundled file is pinned at
-// its default master (static instance). go-opentype renders that default
-// instance only — variation axes are not applied.
-func JetBrainsMono() []byte { return jetBrainsMonoTTF }
+//go:embed atkinsonhyperlegible/atkinsonhyperlegible.ttf
+var mostLegibleTTF []byte
 
 // MostLegible returns Atkinson Hyperlegible, the bundled font with the
 // strongest legibility credentials: it was designed by the Braille
 // Institute specifically to maximize character distinction for readers
 // with low vision, and it benefits every reader in the process. Prefer it
 // whenever legibility, not brand voice, is the deciding factor.
-func MostLegible() []byte { return AtkinsonHyperlegible() }
+//
+// MostLegible is the one family the root fonts package embeds directly —
+// every other family requires importing its own subpackage. This keeps a
+// sensible default usable with zero extra imports, without defeating the
+// per-family lazy-linking model for everyone else.
+func MostLegible() []byte { return mostLegibleTTF }
 
-// All returns every bundled Family, in a stable order.
-func All() []Family {
-	return []Family{
-		{Name: "Atkinson Hyperlegible", Kind: KindSans, License: "OFL-1.1", TTF: AtkinsonHyperlegible()},
-		{Name: "Inter", Kind: KindSans, License: "OFL-1.1", TTF: Inter()},
-		{Name: "Go", Kind: KindSans, License: "BSD-3-Clause", TTF: GoRegular()},
-		{Name: "Lora", Kind: KindSerif, License: "OFL-1.1", TTF: Lora()},
-		{Name: "Go Mono", Kind: KindMono, License: "BSD-3-Clause", TTF: GoMono()},
-		{Name: "JetBrains Mono", Kind: KindMono, License: "OFL-1.1", TTF: JetBrainsMono()},
-	}
-}
-
-// ByName looks up a bundled family by its Family.Name, case-insensitively.
-// ok is false when no family matches.
-func ByName(name string) (ttf []byte, ok bool) {
-	for _, f := range All() {
-		if strings.EqualFold(f.Name, name) {
-			return f.TTF, true
-		}
-	}
-	return nil, false
-}
-
-// Parse decodes ttf (typically the return value of a Family accessor, or
-// Family.TTF) into a *opentype.Font, ready for NewFace and rendering. It is
-// a thin convenience wrapper around opentype.Parse:
+// Parse decodes ttf (typically a subpackage's TTF variable, or the return
+// value of MostLegible) into a *opentype.Font, ready for NewFace and
+// rendering. It is a thin convenience wrapper around opentype.Parse:
 //
 //	f, err := fonts.Parse(fonts.MostLegible())
 func Parse(ttf []byte) (*opentype.Font, error) {
