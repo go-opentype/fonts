@@ -32,6 +32,7 @@ var generated = []Family{
 	{Name: "Noto Sans Egyptian Hieroglyphs", Kind: KindSans, License: "OFL-1.1", ImportPath: "github.com/go-opentype/fonts/notosansegyptianhieroglyphs"},
 	{Name: "Noto Sans Georgian", Kind: KindSans, License: "OFL-1.1", ImportPath: "github.com/go-opentype/fonts/notosansgeorgian"},
 	{Name: "Noto Sans Hebrew", Kind: KindSans, License: "OFL-1.1", ImportPath: "github.com/go-opentype/fonts/notosanshebrew"},
+	{Name: "Noto Sans SC", Kind: KindSans, License: "OFL-1.1", ImportPath: "github.com/go-opentype/fonts/notosanssc"},
 	{Name: "Noto Sans Thai", Kind: KindSans, License: "OFL-1.1", ImportPath: "github.com/go-opentype/fonts/notosansthai"},
 	{Name: "Nunito", Kind: KindSans, License: "OFL-1.1", ImportPath: "github.com/go-opentype/fonts/nunito"},
 	{Name: "Nunito Sans", Kind: KindSans, License: "OFL-1.1", ImportPath: "github.com/go-opentype/fonts/nunitosans"},

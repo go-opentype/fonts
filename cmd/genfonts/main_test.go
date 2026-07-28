@@ -118,6 +118,19 @@ func TestExtractCopyright(t *testing.T) {
 	}
 }
 
+func TestEffectiveMaxTTFBytes(t *testing.T) {
+	def := testSeed("Default Cap", "defaultcap", "DefaultCap-Regular.ttf", fonts.KindSans)
+	if got := effectiveMaxTTFBytes(def); got != maxTTFBytes {
+		t.Errorf("effectiveMaxTTFBytes(no override) = %d, want %d", got, maxTTFBytes)
+	}
+
+	override := def
+	override.MaxTTFBytes = 20_000_000
+	if got := effectiveMaxTTFBytes(override); got != 20_000_000 {
+		t.Errorf("effectiveMaxTTFBytes(override) = %d, want %d", got, 20_000_000)
+	}
+}
+
 func TestKindConst(t *testing.T) {
 	cases := []struct {
 		k    fonts.Kind
@@ -184,6 +197,54 @@ func TestWriteSubpackage(t *testing.T) {
 	}
 	if !bytes.Contains(goSrc, []byte("package testfamily")) {
 		t.Errorf("expected package clause:\n%s", goSrc)
+	}
+}
+
+// TestWriteSubpackageTestRune covers the seed.TestRune != 0 branch of
+// writeSubpackageWithTemplates: it proves the generated _test.go embeds the
+// TestRepresentativeGlyph block with the right rune and hex codepoint, and
+// that the generated .go file is unaffected (TestRuneChar only feeds the
+// test template).
+func TestWriteSubpackageTestRune(t *testing.T) {
+	root := t.TempDir()
+	s := testSeed("CJK Family", "cjkfamily", "CJKFamily[wght].ttf", fonts.KindSans)
+	s.TestRune = '中'
+
+	if err := writeSubpackage(root, s, validTTF, []byte(validOFL)); err != nil {
+		t.Fatalf("writeSubpackage: %v", err)
+	}
+
+	testSrc, err := os.ReadFile(filepath.Join(root, "cjkfamily", "cjkfamily_test.go"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Contains(testSrc, []byte("func TestRepresentativeGlyph(t *testing.T)")) {
+		t.Errorf("expected TestRepresentativeGlyph in generated test:\n%s", testSrc)
+	}
+	if !bytes.Contains(testSrc, []byte("const r = '中'")) {
+		t.Errorf("expected TestRune literal in generated test:\n%s", testSrc)
+	}
+	if !bytes.Contains(testSrc, []byte("U+4E2D")) {
+		t.Errorf("expected hex codepoint comment in generated test:\n%s", testSrc)
+	}
+}
+
+// TestWriteSubpackageNoTestRune covers the seed.TestRune == 0 branch: the
+// generated test must NOT contain the optional glyph-rendering block.
+func TestWriteSubpackageNoTestRune(t *testing.T) {
+	root := t.TempDir()
+	s := testSeed("Latin Family", "latinfamily", "LatinFamily-Regular.ttf", fonts.KindSans)
+
+	if err := writeSubpackage(root, s, validTTF, []byte(validOFL)); err != nil {
+		t.Fatalf("writeSubpackage: %v", err)
+	}
+
+	testSrc, err := os.ReadFile(filepath.Join(root, "latinfamily", "latinfamily_test.go"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if bytes.Contains(testSrc, []byte("TestRepresentativeGlyph")) {
+		t.Errorf("did not expect TestRepresentativeGlyph without TestRune:\n%s", testSrc)
 	}
 }
 

@@ -43,12 +43,24 @@ import (
 )
 
 // maxTTFBytes caps how large a single family's .ttf may be before
-// cmd/genfonts skips it. This keeps the module a "few dozen families"
-// rather than gigabytes: it excludes pathological multi-axis variable
-// fonts (e.g. Merriweather's ~4.6 MB default master) and giant CJK-scale
-// Noto variants, while comfortably admitting ordinary Latin/Greek/Cyrillic
-// families including the ~2 MB Noto Sans.
+// cmd/genfonts skips it, unless the seed sets its own seed.MaxTTFBytes
+// (see effectiveMaxTTFBytes). This keeps the module a "few dozen families"
+// rather than gigabytes by default: it excludes pathological multi-axis
+// variable fonts (e.g. Merriweather's ~4.6 MB default master), while
+// comfortably admitting ordinary Latin/Greek/Cyrillic families including
+// the ~2 MB Noto Sans. Giant CJK-scale Noto variants opt in individually
+// via seed.MaxTTFBytes (see notosanssc in seeds.go) rather than raising
+// this default for everyone.
 const maxTTFBytes = 2_500_000
+
+// effectiveMaxTTFBytes returns s.MaxTTFBytes if the seed set a positive
+// per-seed override, else the module-wide maxTTFBytes default.
+func effectiveMaxTTFBytes(s seed) int {
+	if s.MaxTTFBytes > 0 {
+		return s.MaxTTFBytes
+	}
+	return maxTTFBytes
+}
 
 // googleFontsRawBase is the raw.githubusercontent.com base URL under which
 // every seed's "ofl/<slug>/..." files live. It is a var, not a const, so
@@ -114,8 +126,8 @@ func run(root string, seedList []seed) ([]result, error) {
 			results = append(results, r)
 			continue
 		}
-		if len(ttf) > maxTTFBytes {
-			r.reason = fmt.Sprintf("%d bytes exceeds %d byte cap", len(ttf), maxTTFBytes)
+		if cap := effectiveMaxTTFBytes(s); len(ttf) > cap {
+			r.reason = fmt.Sprintf("%d bytes exceeds %d byte cap", len(ttf), cap)
 			results = append(results, r)
 			continue
 		}
@@ -275,13 +287,44 @@ func TestParse(t *testing.T) {
 		t.Fatalf("NumGlyphs() = %d, want > 0", f.NumGlyphs())
 	}
 }
-`))
+{{if .TestRuneChar}}
+// TestRepresentativeGlyph proves TTF maps and rasterises {{.TestRuneChar}} (U+{{.TestRuneHex}}),
+// a rune this family's script exists to cover — stronger evidence than
+// TestParse's NumGlyphs() check alone.
+func TestRepresentativeGlyph(t *testing.T) {
+	f, err := opentype.Parse(TTF)
+	if err != nil {
+		t.Fatalf("opentype.Parse: %v", err)
+	}
+	const r = '{{.TestRuneChar}}'
+	face := f.NewFace(64)
+	bounds, mask, _, advance, ok := face.GlyphMask(r, 0, 0)
+	if !ok {
+		t.Fatalf("GlyphMask(%q): rune not mapped by cmap, or corrupt outline", r)
+	}
+	if mask == nil {
+		t.Fatalf("GlyphMask(%q): want a non-nil mask (drawn ink), got nil", r)
+	}
+	if bounds.Empty() {
+		t.Errorf("GlyphMask(%q) bounds is empty, want a drawn glyph", r)
+	}
+	if advance <= 0 {
+		t.Errorf("GlyphMask(%q) advance = %d, want > 0", r, advance)
+	}
+}
+{{end}}`))
 
 type subpackageData struct {
 	Slug         string
 	Name         string
 	Copyright    string
 	VariableFont bool
+	// TestRuneChar is the seed's TestRune rendered as a one-rune string
+	// ("" when the seed did not set TestRune), and TestRuneHex is its
+	// upper-case hex codepoint ("4E2D"). Both feed the optional
+	// TestRepresentativeGlyph block in subpackageTestTmpl above.
+	TestRuneChar string
+	TestRuneHex  string
 }
 
 // writeSubpackage writes the .ttf, .go and _test.go files for one family
@@ -308,6 +351,10 @@ func writeSubpackageWithTemplates(root string, s seed, ttf, oflText []byte, tmpl
 		Name:         s.Name,
 		Copyright:    extractCopyright(string(oflText)),
 		VariableFont: strings.Contains(s.TTFFile, "["),
+	}
+	if s.TestRune != 0 {
+		data.TestRuneChar = string(s.TestRune)
+		data.TestRuneHex = fmt.Sprintf("%04X", s.TestRune)
 	}
 
 	if err := renderGoFile(filepath.Join(dir, s.Slug+".go"), tmpl, data); err != nil {
