@@ -47,6 +47,18 @@ type seed struct {
 // that exceeds maxTTFBytes, and Tinos's google/fonts directory currently
 // has no OFL.txt to bundle. See the generator's stdout for the live
 // skip list.
+//
+// The notosans* entries below (Arabic, Hebrew, Devanagari, Thai, Egyptian
+// Hieroglyphs, Georgian, Armenian) are non-Latin script families, added so
+// the module can render RTL, Indic, and other non-Latin text without
+// requiring callers to source a .ttf themselves. Noto Sans CJK (Simplified
+// Chinese, Traditional Chinese, Japanese, Korean) is deliberately NOT
+// seeded here: each CJK variant's shipped .ttf is 10-18 MB, far past
+// maxTTFBytes, and would balloon this module for every consumer whether or
+// not they need CJK. Callers who need CJK glyph coverage should fetch
+// Noto Sans CJK (or Noto Sans SC/TC/JP/KR) directly from google/fonts and
+// embed it in their own package; opentype.Parse accepts it exactly as it
+// accepts every bundled family here.
 var seeds = []seed{
 	{Name: "Roboto", Slug: "roboto", TTFFile: "Roboto[wdth,wght].ttf", Kind: fonts.KindSans},
 	{Name: "Open Sans", Slug: "opensans", TTFFile: "OpenSans[wdth,wght].ttf", Kind: fonts.KindSans},
@@ -80,4 +92,15 @@ var seeds = []seed{
 	{Name: "Arimo", Slug: "arimo", TTFFile: "Arimo[wght].ttf", Kind: fonts.KindSans},
 	{Name: "Tinos", Slug: "tinos", TTFFile: "Tinos-Regular.ttf", Kind: fonts.KindSerif},
 	{Name: "Cousine", Slug: "cousine", TTFFile: "Cousine-Regular.ttf", Kind: fonts.KindMono},
+
+	// Non-Latin script families: RTL (Arabic, Hebrew), Indic (Devanagari),
+	// Southeast Asian (Thai), Ancient Egyptian (Egyptian Hieroglyphs, a
+	// Unicode Plane 1 / SMP script), and Caucasian (Georgian, Armenian).
+	{Name: "Noto Sans Arabic", Slug: "notosansarabic", TTFFile: "NotoSansArabic[wdth,wght].ttf", Kind: fonts.KindSans},
+	{Name: "Noto Sans Hebrew", Slug: "notosanshebrew", TTFFile: "NotoSansHebrew[wdth,wght].ttf", Kind: fonts.KindSans},
+	{Name: "Noto Sans Devanagari", Slug: "notosansdevanagari", TTFFile: "NotoSansDevanagari[wdth,wght].ttf", Kind: fonts.KindSans},
+	{Name: "Noto Sans Thai", Slug: "notosansthai", TTFFile: "NotoSansThai[wdth,wght].ttf", Kind: fonts.KindSans},
+	{Name: "Noto Sans Egyptian Hieroglyphs", Slug: "notosansegyptianhieroglyphs", TTFFile: "NotoSansEgyptianHieroglyphs-Regular.ttf", Kind: fonts.KindSans},
+	{Name: "Noto Sans Georgian", Slug: "notosansgeorgian", TTFFile: "NotoSansGeorgian[wdth,wght].ttf", Kind: fonts.KindSans},
+	{Name: "Noto Sans Armenian", Slug: "notosansarmenian", TTFFile: "NotoSansArmenian[wdth,wght].ttf", Kind: fonts.KindSans},
 }
