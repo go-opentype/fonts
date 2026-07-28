@@ -21,6 +21,17 @@ type seed struct {
 	// directory.
 	TTFFile string
 	Kind    fonts.Kind
+	// MaxTTFBytes overrides maxTTFBytes for this seed alone, when non-zero.
+	// Use it for the rare family (e.g. a CJK Noto variant) whose .ttf is
+	// legitimately far larger than the default cap; every other seed
+	// leaves this zero and gets the default.
+	MaxTTFBytes int
+	// TestRune, when non-zero, names one rune the family's script exists
+	// to cover (e.g. '中' for a CJK family). When set, the generated
+	// <slug>_test.go gets an extra test that renders that rune through
+	// Font.NewFace.GlyphMask, proving actual script coverage rather than
+	// just NumGlyphs() > 0.
+	TestRune rune
 }
 
 // seeds is the curated list of Google Fonts OFL families cmd/genfonts
@@ -51,14 +62,20 @@ type seed struct {
 // The notosans* entries below (Arabic, Hebrew, Devanagari, Thai, Egyptian
 // Hieroglyphs, Georgian, Armenian) are non-Latin script families, added so
 // the module can render RTL, Indic, and other non-Latin text without
-// requiring callers to source a .ttf themselves. Noto Sans CJK (Simplified
-// Chinese, Traditional Chinese, Japanese, Korean) is deliberately NOT
-// seeded here: each CJK variant's shipped .ttf is 10-18 MB, far past
-// maxTTFBytes, and would balloon this module for every consumer whether or
-// not they need CJK. Callers who need CJK glyph coverage should fetch
-// Noto Sans CJK (or Noto Sans SC/TC/JP/KR) directly from google/fonts and
-// embed it in their own package; opentype.Parse accepts it exactly as it
-// accepts every bundled family here.
+// requiring callers to source a .ttf themselves.
+//
+// Noto Sans SC (Simplified Chinese) is the one CJK family bundled by
+// default: it covers Han ideographs, kana, and common CJK punctuation, and
+// is representative of CJK coverage generally. Its .ttf is ~17 MB, far
+// past the default maxTTFBytes cap, so it sets MaxTTFBytes explicitly
+// below rather than changing the cap for every other family. Noto Sans TC
+// (Traditional Chinese), Noto Sans JP (Japanese) and Noto Sans KR (Korean)
+// are NOT bundled — each is another 10-18 MB and would balloon this module
+// for every consumer whether or not they need that specific script. Adding
+// any of them is a one-line seed (same MaxTTFBytes/TestRune pattern as
+// notosanssc below) plus `GOWORK=off go run ./cmd/genfonts`; see the
+// google/fonts slugs in the README's CJK section:
+// notosanstc, notosansjp, notosanskr.
 var seeds = []seed{
 	{Name: "Roboto", Slug: "roboto", TTFFile: "Roboto[wdth,wght].ttf", Kind: fonts.KindSans},
 	{Name: "Open Sans", Slug: "opensans", TTFFile: "OpenSans[wdth,wght].ttf", Kind: fonts.KindSans},
@@ -103,4 +120,11 @@ var seeds = []seed{
 	{Name: "Noto Sans Egyptian Hieroglyphs", Slug: "notosansegyptianhieroglyphs", TTFFile: "NotoSansEgyptianHieroglyphs-Regular.ttf", Kind: fonts.KindSans},
 	{Name: "Noto Sans Georgian", Slug: "notosansgeorgian", TTFFile: "NotoSansGeorgian[wdth,wght].ttf", Kind: fonts.KindSans},
 	{Name: "Noto Sans Armenian", Slug: "notosansarmenian", TTFFile: "NotoSansArmenian[wdth,wght].ttf", Kind: fonts.KindSans},
+
+	// CJK: Noto Sans SC (Simplified Chinese) covers Han ideographs, kana
+	// and common CJK punctuation. Its .ttf (~17 MB) is far past the
+	// default maxTTFBytes cap, hence the per-seed MaxTTFBytes override.
+	// TestRune '中' (U+4E2D) makes the generated test render an actual Han
+	// glyph, not just parse the font.
+	{Name: "Noto Sans SC", Slug: "notosanssc", TTFFile: "NotoSansSC[wght].ttf", Kind: fonts.KindSans, MaxTTFBytes: 20_000_000, TestRune: '中'},
 }

@@ -5,12 +5,13 @@
 [![Go Report Card](https://goreportcard.com/badge/github.com/go-opentype/fonts)](https://goreportcard.com/report/github.com/go-opentype/fonts)
 [![License](https://img.shields.io/badge/code%20license-BSD--3--Clause-blue.svg)](LICENSE)
 
-43 legible, permissively-licensed TrueType fonts, one Go subpackage per
+44 legible, permissively-licensed TrueType fonts, one Go subpackage per
 family, each with its own `//go:embed` — no downloading, no sourcing a
 `.ttf` yourself, and **your binary links only the families you import**.
 Coverage spans Latin, Cyrillic and Greek plus seven non-Latin scripts —
 Arabic and Hebrew (RTL), Devanagari, Thai, Georgian, Armenian and Egyptian
-Hieroglyphs — for RTL and non-Latin rendering/testing out of the box.
+Hieroglyphs — for RTL and non-Latin rendering/testing out of the box — plus
+Noto Sans SC for CJK (Han ideographs, kana and common CJK punctuation).
 Built for [go-opentype/opentype](https://github.com/go-opentype/opentype),
 the pure-Go, stdlib-only TrueType engine, but the raw bytes work with any
 parser that accepts a `.ttf`.
@@ -38,8 +39,8 @@ family is `//go:embed`ded into its own subpackage.
 
 `//go:embed` is eager *per package*: any package that embeds a font links
 that font's bytes into every binary that imports it, whether or not the
-binary ever uses it. A `fonts` package that bulk-embedded all 43 families
-would put all 43 into your binary the moment you imported it for anything
+binary ever uses it. A `fonts` package that bulk-embedded all 44 families
+would put all 44 into your binary the moment you imported it for anything
 at all.
 
 So the root `fonts` package doesn't do that. Each family lives in its own
@@ -70,11 +71,12 @@ The root `fonts` package holds two things only:
 
 ## Bundled fonts
 
-Six families are hand-curated (present since v0.1.0); the other thirty-seven
+Six families are hand-curated (present since v0.1.0); the other thirty-eight
 were ingested by [`cmd/genfonts`](#generator-cmdgenfonts) from
 [google/fonts](https://github.com/google/fonts)'s `ofl/` directory. Script
-is listed for the seven non-Latin families (added in v0.3.0); every other
-family covers Latin, and most also cover Cyrillic and/or Greek.
+is listed for the seven non-Latin families (added in v0.3.0) and for Noto
+Sans SC, the bundled CJK family (added in v0.4.0); every other family
+covers Latin, and most also cover Cyrillic and/or Greek.
 
 | Name                  | Kind   | License        | Script              | Import path                                       |
 |------------------------|--------|-----------------|----------------------|----------------------------------------------------|
@@ -106,6 +108,7 @@ family covers Latin, and most also cover Cyrillic and/or Greek.
 | Noto Sans Egyptian Hieroglyphs | Sans | OFL-1.1    | Egyptian Hieroglyphs  | `github.com/go-opentype/fonts/notosansegyptianhieroglyphs` |
 | Noto Sans Georgian     | Sans   | OFL-1.1         | Georgian              | `github.com/go-opentype/fonts/notosansgeorgian`     |
 | Noto Sans Hebrew       | Sans   | OFL-1.1         | Hebrew (RTL)          | `github.com/go-opentype/fonts/notosanshebrew`       |
+| Noto Sans SC           | Sans   | OFL-1.1         | CJK (Han, kana)       | `github.com/go-opentype/fonts/notosanssc`           |
 | Noto Sans Thai         | Sans   | OFL-1.1         | Thai                  | `github.com/go-opentype/fonts/notosansthai`         |
 | Nunito                 | Sans   | OFL-1.1         | Latin                | `github.com/go-opentype/fonts/nunito`               |
 | Nunito Sans            | Sans   | OFL-1.1         | Latin                | `github.com/go-opentype/fonts/nunitosans`           |
@@ -127,22 +130,37 @@ file per family (SIL Open Font License 1.1 for every `OFL-1.1` row, plus
 `GoFonts-LICENSE.txt` — BSD-3-Clause, Bigelow & Holmes — shared by Go and Go
 Mono).
 
-### Non-Latin scripts, and why CJK isn't bundled
+### Non-Latin scripts, and CJK coverage
 
 The seven `notosans*` script families above exist so RTL (Arabic, Hebrew),
 Indic (Devanagari), Southeast Asian (Thai), Caucasian (Georgian, Armenian)
 and Ancient Egyptian (Hieroglyphs, a Unicode Plane 1 / SMP script) text can
 be rendered or tested without sourcing a `.ttf` yourself.
 
-**Noto Sans CJK (Simplified Chinese, Traditional Chinese, Japanese,
-Korean) is deliberately not bundled.** Each CJK variant's shipped `.ttf` is
-10-18 MB — multiple times the combined size of every other family in this
-module — because a CJK glyph set is an order of magnitude larger than any
-alphabetic script's. Bundling even one would make every consumer of this
-module pay that cost at `go get` time whether or not they render CJK text.
-If you need CJK coverage, fetch the variant you need directly from
-[google/fonts](https://github.com/google/fonts/tree/main/ofl) (e.g.
-`notosanssc`, `notosanstc`, `notosansjp`, `notosanskr`) and embed it in your
+**Noto Sans SC (Simplified Chinese) is bundled as the representative CJK
+family**, covering Han ideographs, kana, and common CJK punctuation —
+`github.com/go-opentype/fonts/notosanssc`. Its `.ttf` is ~17 MB, so
+`cmd/genfonts` gives it a per-seed size-cap override (`seed.MaxTTFBytes`)
+rather than raising the module-wide 2.5 MB cap for every other family; see
+[Generator: cmd/genfonts](#generator-cmdgenfonts) below.
+
+**Noto Sans TC (Traditional Chinese), Noto Sans JP (Japanese) and Noto
+Sans KR (Korean) are not bundled by default**, to keep this module lean:
+each is another 10-18 MB, and most consumers need at most one CJK script.
+Adding any of them is a one-line seed plus a regenerate — copy the
+`notosanssc` entry in [`cmd/genfonts/seeds.go`](cmd/genfonts/seeds.go),
+swap in the family's `google/fonts` slug and TTF filename, set
+`MaxTTFBytes` to comfortably clear its shipped size, and run:
+
+```sh
+GOWORK=off go run ./cmd/genfonts
+```
+
+The `google/fonts` slugs for the other three CJK scripts are `notosanstc`,
+`notosansjp` and `notosanskr` (each under `ofl/<slug>/`, with a
+`NotoSans*[wght].ttf` variable-font file analogous to Noto Sans SC's). You
+can also skip bundling entirely and fetch a `.ttf` straight from
+[google/fonts](https://github.com/google/fonts/tree/main/ofl) into your
 own package — `opentype.Parse` accepts it exactly as it accepts every
 family bundled here.
 
@@ -203,9 +221,11 @@ subpackage for each one that survives validation. It:
    `.ttf` file (a static Regular instance where one exists, otherwise the
    family's single default-master variable font).
 2. Fetches the `.ttf` and `OFL.txt` over plain `net/http`.
-3. Validates the `.ttf` through `opentype.Parse` and enforces a size cap
-   (2.5 MB — excludes pathological multi-axis variable fonts and
-   giant CJK-scale Noto variants).
+3. Validates the `.ttf` through `opentype.Parse` and enforces a size cap —
+   2.5 MB by default (excludes pathological multi-axis variable fonts),
+   overridable per seed via `seed.MaxTTFBytes` for the rare family that's
+   legitimately larger (Noto Sans SC sets 20 MB to admit its ~17 MB
+   `.ttf`).
 4. **Skips and logs** (not an error) any family that fails to fetch, fails
    to parse, has no `OFL.txt` to bundle, or exceeds the size cap.
 5. Writes `<slug>/<slug>.ttf`, `<slug>/<slug>.go` (embed + doc comment),
@@ -219,14 +239,14 @@ Run it from the module root:
 GOWORK=off go run ./cmd/genfonts
 ```
 
-The last run ingested 37 of 39 seeded families; **Merriweather** (its only
-shipped `.ttf` is a ~4.6 MB multi-axis variable font, over the size cap)
-and **Tinos** (its `google/fonts` directory currently ships no `OFL.txt`)
-were skipped. Ubuntu is deliberately not seeded at all: it ships under the
-Ubuntu Font License (UFL), not OFL, outside this generator's scope. Noto
-Sans CJK is also deliberately not seeded — see
-[Non-Latin scripts, and why CJK isn't bundled](#non-latin-scripts-and-why-cjk-isnt-bundled)
-above.
+The last run ingested 38 of 40 seeded families; **Merriweather** (its only
+shipped `.ttf` is a ~4.6 MB multi-axis variable font, over the default size
+cap) and **Tinos** (its `google/fonts` directory currently ships no
+`OFL.txt`) were skipped. Ubuntu is deliberately not seeded at all: it ships
+under the Ubuntu Font License (UFL), not OFL, outside this generator's
+scope. Noto Sans TC, JP and KR are also deliberately not seeded — see
+[Non-Latin scripts, and CJK coverage](#non-latin-scripts-and-cjk-coverage)
+above for how to add one.
 
 ## License
 
