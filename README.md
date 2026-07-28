@@ -3,6 +3,8 @@
 [![CI](https://github.com/go-opentype/fonts/actions/workflows/ci.yml/badge.svg)](https://github.com/go-opentype/fonts/actions/workflows/ci.yml)
 [![Go Reference](https://pkg.go.dev/badge/github.com/go-opentype/fonts.svg)](https://pkg.go.dev/github.com/go-opentype/fonts)
 [![Go Report Card](https://goreportcard.com/badge/github.com/go-opentype/fonts)](https://goreportcard.com/report/github.com/go-opentype/fonts)
+![coverage](https://img.shields.io/badge/coverage-100%25-1a7f37)
+![go](https://img.shields.io/badge/Go-1.26.4%2B-00ADD8?logo=go&logoColor=white)
 [![License](https://img.shields.io/badge/code%20license-BSD--3--Clause-blue.svg)](LICENSE)
 
 44 legible, permissively-licensed TrueType fonts, one Go subpackage per
@@ -16,6 +18,17 @@ Built for [go-opentype/opentype](https://github.com/go-opentype/opentype),
 the pure-Go, stdlib-only TrueType engine, but the raw bytes work with any
 parser that accepts a `.ttf`.
 
+## Install
+
+```sh
+go get github.com/go-opentype/fonts
+```
+
+Pure Go, no cgo, no external assets to fetch at build or run time — every
+family is `//go:embed`ded into its own subpackage.
+
+## Quick start
+
 ```go
 import (
 	"github.com/go-opentype/fonts"
@@ -25,15 +38,6 @@ import (
 f, err := fonts.Parse(inter.TTF) // *opentype.Font
 face := f.NewFace(16)            // 16px face
 ```
-
-## Install
-
-```sh
-go get github.com/go-opentype/fonts
-```
-
-Pure Go, no cgo, no external assets to fetch at build or run time — every
-family is `//go:embed`ded into its own subpackage.
 
 ## The lazy-at-compile-time import model
 
@@ -247,6 +251,28 @@ under the Ubuntu Font License (UFL), not OFL, outside this generator's
 scope. Noto Sans TC, JP and KR are also deliberately not seeded — see
 [Non-Latin scripts, and CJK coverage](#non-latin-scripts-and-cjk-coverage)
 above for how to add one.
+
+See [`example_test.go`](./example_test.go) for runnable examples of `Parse`,
+`MostLegible`, `All` and `ByName`, and `go doc github.com/go-opentype/fonts`
+for the full reference.
+
+## Part of the go-opentype pure-Go text stack
+
+`go-opentype/fonts` is the bundled-face layer of a dependency-free text
+stack:
+
+- **[opentype](https://github.com/go-opentype/opentype)** — the parsing,
+  GSUB/GPOS shaping and rasterising engine that `Parse` hands the raw
+  `.ttf` bytes to.
+- **[bidi](https://github.com/go-opentype/bidi)** — a full Unicode
+  Bidirectional Algorithm (UBA) implementation, for ordering mixed
+  left-to-right/right-to-left text (Arabic, Hebrew) before it is shaped.
+- **[shape](https://github.com/go-opentype/shape)** — a HarfBuzz-lite
+  complex-script shaper (Arabic, Indic, Hangul, USE, Egyptian
+  hieroglyphs, ...) built on `opentype`'s GSUB/GPOS engine; several of its
+  real-font tests and examples use the non-Latin families bundled here.
+- **[fonts](https://github.com/go-opentype/fonts)** (this repo) — the 44
+  bundled OFL/BSD font families.
 
 ## License
 
