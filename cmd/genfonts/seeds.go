@@ -64,18 +64,17 @@ type seed struct {
 // the module can render RTL, Indic, and other non-Latin text without
 // requiring callers to source a .ttf themselves.
 //
-// Noto Sans SC (Simplified Chinese) is the one CJK family bundled by
-// default: it covers Han ideographs, kana, and common CJK punctuation, and
-// is representative of CJK coverage generally. Its .ttf is ~17 MB, far
-// past the default maxTTFBytes cap, so it sets MaxTTFBytes explicitly
-// below rather than changing the cap for every other family. Noto Sans TC
-// (Traditional Chinese), Noto Sans JP (Japanese) and Noto Sans KR (Korean)
-// are NOT bundled — each is another 10-18 MB and would balloon this module
-// for every consumer whether or not they need that specific script. Adding
-// any of them is a one-line seed (same MaxTTFBytes/TestRune pattern as
-// notosanssc below) plus `GOWORK=off go run ./cmd/genfonts`; see the
-// google/fonts slugs in the README's CJK section:
-// notosanstc, notosansjp, notosanskr.
+// The bundled CJK families are Noto Sans SC (Simplified Chinese), Noto
+// Sans JP (Japanese) and Noto Sans KR (Korean). Together they cover Han
+// ideographs (with the JP- and KR-specific kanji/hanja forms), kana,
+// Hangul, and common CJK punctuation. Each .ttf is ~10-17 MB, far past
+// the default maxTTFBytes cap, so each sets MaxTTFBytes explicitly below
+// rather than changing the cap for every other family. Noto Sans TC
+// (Traditional Chinese) is NOT bundled — it is another 10-18 MB and would
+// balloon this module for consumers who do not need that specific script.
+// Adding it is a one-line seed (same MaxTTFBytes/TestRune pattern as the
+// notosans* CJK entries below) plus `GOWORK=off go run ./cmd/genfonts`;
+// see the google/fonts slug in the README's CJK section: notosanstc.
 var seeds = []seed{
 	{Name: "Roboto", Slug: "roboto", TTFFile: "Roboto[wdth,wght].ttf", Kind: fonts.KindSans},
 	{Name: "Open Sans", Slug: "opensans", TTFFile: "OpenSans[wdth,wght].ttf", Kind: fonts.KindSans},
@@ -127,4 +126,13 @@ var seeds = []seed{
 	// TestRune '中' (U+4E2D) makes the generated test render an actual Han
 	// glyph, not just parse the font.
 	{Name: "Noto Sans SC", Slug: "notosanssc", TTFFile: "NotoSansSC[wght].ttf", Kind: fonts.KindSans, MaxTTFBytes: 20_000_000, TestRune: '中'},
+
+	// Noto Sans JP (Japanese) covers kana plus the JP-specific kanji
+	// forms; TestRune 'あ' (U+3042, Hiragana A) renders an actual kana
+	// glyph. Noto Sans KR (Korean) covers Hangul plus hanja; TestRune '가'
+	// (U+AC00, the first Hangul syllable) renders an actual Hangul glyph.
+	// Both .ttf files are ~10 MB, past the default cap, hence the per-seed
+	// MaxTTFBytes override, same as notosanssc above.
+	{Name: "Noto Sans JP", Slug: "notosansjp", TTFFile: "NotoSansJP[wght].ttf", Kind: fonts.KindSans, MaxTTFBytes: 20_000_000, TestRune: 'あ'},
+	{Name: "Noto Sans KR", Slug: "notosanskr", TTFFile: "NotoSansKR[wght].ttf", Kind: fonts.KindSans, MaxTTFBytes: 20_000_000, TestRune: '가'},
 }
