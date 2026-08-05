@@ -181,10 +181,14 @@ the only family embedded directly in the root package.
 
 Many families are variable fonts upstream (Inter, Lora, JetBrains Mono, and
 most of the `cmd/genfonts`-ingested set); each bundled `.ttf` is pinned at
-that family's default master (static instance). go-opentype has no
-variable-font support, so it always renders that default instance —
-OpenType Variations axes are not applied. Each affected subpackage's doc
-comment says so explicitly.
+that family's default master (static instance) to keep the bundle simple and
+small. That's a packaging choice, not an engine limitation:
+[go-opentype/opentype](https://github.com/go-opentype/opentype) does fully
+support OpenType Variations (`fvar`/`avar`/`gvar`/`HVAR`/`VVAR`/`MVAR`, CFF2
+blends) via `(*Face).SetVariation`. If you need a specific axis coordinate
+(e.g. Inter at weight 600), source that family's variable `.ttf` yourself
+and parse it with `opentype.Parse`. Each affected subpackage's doc comment
+notes that its bundled file is the static default master.
 
 ## API
 
