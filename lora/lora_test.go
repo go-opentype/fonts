@@ -10,14 +10,24 @@ import (
 	"github.com/go-opentype/opentype"
 )
 
-// TestParse proves TTF loads through go-opentype and has at least one
-// glyph, on every CI run.
+// TestParse proves every bundled style loads through go-opentype and has at
+// least one glyph, on every CI run.
 func TestParse(t *testing.T) {
-	f, err := opentype.Parse(TTF)
-	if err != nil {
-		t.Fatalf("opentype.Parse: %v", err)
-	}
-	if f.NumGlyphs() <= 0 {
-		t.Fatalf("NumGlyphs() = %d, want > 0", f.NumGlyphs())
+	for _, tc := range []struct {
+		name string
+		ttf  []byte
+	}{
+		{"Regular", TTF},
+		{"Bold", BoldTTF},
+		{"Italic", ItalicTTF},
+		{"BoldItalic", BoldItalicTTF},
+	} {
+		f, err := opentype.Parse(tc.ttf)
+		if err != nil {
+			t.Fatalf("%s: opentype.Parse: %v", tc.name, err)
+		}
+		if f.NumGlyphs() <= 0 {
+			t.Fatalf("%s: NumGlyphs() = %d, want > 0", tc.name, f.NumGlyphs())
+		}
 	}
 }
