@@ -85,6 +85,7 @@ func TestKindString(t *testing.T) {
 		{KindSerif, "serif"},
 		{KindMono, "mono"},
 		{KindDisplay, "display"},
+		{KindEmoji, "emoji"},
 		{Kind(99), "unknown"},
 	}
 	for _, c := range cases {

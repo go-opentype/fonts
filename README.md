@@ -7,14 +7,14 @@
 ![go](https://img.shields.io/badge/Go-1.26.4%2B-00ADD8?logo=go&logoColor=white)
 [![License](https://img.shields.io/badge/code%20license-BSD--3--Clause-blue.svg)](LICENSE)
 
-46 legible, permissively-licensed TrueType fonts, one Go subpackage per
+47 legible, permissively-licensed TrueType fonts, one Go subpackage per
 family, each with its own `//go:embed` — no downloading, no sourcing a
 `.ttf` yourself, and **your binary links only the families you import**.
 Coverage spans Latin, Cyrillic and Greek plus seven non-Latin scripts —
 Arabic and Hebrew (RTL), Devanagari, Thai, Georgian, Armenian and Egyptian
 Hieroglyphs — for RTL and non-Latin rendering/testing out of the box — plus
 Noto Sans SC, JP and KR for CJK (Han ideographs, kana, Hangul and common
-CJK punctuation).
+CJK punctuation), plus Noto Emoji for pictographs.
 Built for [go-opentype/opentype](https://github.com/go-opentype/opentype),
 the pure-Go, stdlib-only TrueType engine, but the raw bytes work with any
 parser that accepts a `.ttf`.
@@ -44,8 +44,8 @@ face := f.NewFace(16)            // 16px face
 
 `//go:embed` is eager *per package*: any package that embeds a font links
 that font's bytes into every binary that imports it, whether or not the
-binary ever uses it. A `fonts` package that bulk-embedded all 46 families
-would put all 46 into your binary the moment you imported it for anything
+binary ever uses it. A `fonts` package that bulk-embedded all 47 families
+would put all 47 into your binary the moment you imported it for anything
 at all.
 
 So the root `fonts` package doesn't do that. Each family lives in its own
@@ -76,13 +76,25 @@ The root `fonts` package holds two things only:
 
 ## Bundled fonts
 
-Six families are hand-curated (present since v0.1.0); the other forty
-were ingested by [`cmd/genfonts`](#generator-cmdgenfonts) from
+Six families are hand-curated (present since v0.1.0); the other
+forty-one were ingested by [`cmd/genfonts`](#generator-cmdgenfonts) from
 [google/fonts](https://github.com/google/fonts)'s `ofl/` directory. Script
 is listed for the seven non-Latin families (added in v0.3.0) and for the
 bundled CJK families — Noto Sans SC (added in v0.4.0), plus Noto Sans JP
-and KR (added in v0.4.2); every other family covers Latin, and most also
-cover Cyrillic and/or Greek.
+and KR (added in v0.4.2), and for Noto Emoji (added in v0.6.0). Every
+other family covers Latin, and most also cover Cyrillic and/or Greek.
+
+**Noto Emoji** is the one family whose `Kind` is `emoji` rather than a
+letterform style, and it is the *monochrome* Noto family, not the colour one:
+its glyphs are ordinary `glyf` outlines, so go-opentype rasterises them like
+any other face. Noto Color Emoji is deliberately not bundled — it stores its
+glyphs in CBDT/CBLC bitmap strikes, which go-opentype does not read, so it
+would parse and then draw nothing. Because the family carries no letters in any
+script, it is safe as the *last* entry of a fallback chain: it can only ever
+claim runes the text faces have already declined. (It does map `#`, `*`, the
+ten digits, space, `(c)` and `(r)` — the bases of the keycap emoji sequences —
+but a text face covers all fifteen, so the emoji face is never reached for
+them.)
 
 | Name                  | Kind   | License        | Script              | Import path                                       |
 |------------------------|--------|-----------------|----------------------|----------------------------------------------------|
@@ -109,6 +121,7 @@ cover Cyrillic and/or Greek.
 | Mulish                 | Sans   | OFL-1.1         | Latin                | `github.com/go-opentype/fonts/mulish`               |
 | Noto Sans              | Sans   | OFL-1.1         | Latin/Greek/Cyrillic | `github.com/go-opentype/fonts/notosans`             |
 | Noto Sans Arabic       | Sans   | OFL-1.1         | Arabic (RTL)          | `github.com/go-opentype/fonts/notosansarabic`       |
+| Noto Emoji             | Emoji  | OFL-1.1         | Emoji / pictographs   | `github.com/go-opentype/fonts/notoemoji`            |
 | Noto Sans Armenian     | Sans   | OFL-1.1         | Armenian              | `github.com/go-opentype/fonts/notosansarmenian`     |
 | Noto Sans Devanagari   | Sans   | OFL-1.1         | Devanagari            | `github.com/go-opentype/fonts/notosansdevanagari`   |
 | Noto Sans Egyptian Hieroglyphs | Sans | OFL-1.1    | Egyptian Hieroglyphs  | `github.com/go-opentype/fonts/notosansegyptianhieroglyphs` |

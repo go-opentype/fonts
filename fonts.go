@@ -25,10 +25,14 @@ const (
 	// KindDisplay is a face intended for headlines and short text at large
 	// sizes, rather than for body copy.
 	KindDisplay
+	// KindEmoji is a pictographic face: its glyphs are emoji and symbols, not
+	// letterforms. It carries no alphabet at all, so it belongs LAST in a
+	// fallback chain — as a supplement to a text face, never as one.
+	KindEmoji
 )
 
 // String returns the lower-case name of k ("sans", "serif", "mono",
-// "display"), or "unknown" for any other value.
+// "display", "emoji"), or "unknown" for any other value.
 func (k Kind) String() string {
 	switch k {
 	case KindSans:
@@ -39,6 +43,8 @@ func (k Kind) String() string {
 		return "mono"
 	case KindDisplay:
 		return "display"
+	case KindEmoji:
+		return "emoji"
 	default:
 		return "unknown"
 	}

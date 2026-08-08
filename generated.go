@@ -25,6 +25,7 @@ var generated = []Family{
 	{Name: "Manrope", Kind: KindSans, License: "OFL-1.1", ImportPath: "github.com/go-opentype/fonts/manrope"},
 	{Name: "Montserrat", Kind: KindSans, License: "OFL-1.1", ImportPath: "github.com/go-opentype/fonts/montserrat"},
 	{Name: "Mulish", Kind: KindSans, License: "OFL-1.1", ImportPath: "github.com/go-opentype/fonts/mulish"},
+	{Name: "Noto Emoji", Kind: KindEmoji, License: "OFL-1.1", ImportPath: "github.com/go-opentype/fonts/notoemoji"},
 	{Name: "Noto Sans", Kind: KindSans, License: "OFL-1.1", ImportPath: "github.com/go-opentype/fonts/notosans"},
 	{Name: "Noto Sans Arabic", Kind: KindSans, License: "OFL-1.1", ImportPath: "github.com/go-opentype/fonts/notosansarabic"},
 	{Name: "Noto Sans Armenian", Kind: KindSans, License: "OFL-1.1", ImportPath: "github.com/go-opentype/fonts/notosansarmenian"},

@@ -140,6 +140,7 @@ func TestKindConst(t *testing.T) {
 		{fonts.KindSerif, "KindSerif"},
 		{fonts.KindMono, "KindMono"},
 		{fonts.KindDisplay, "KindDisplay"},
+		{fonts.KindEmoji, "KindEmoji"},
 		{fonts.Kind(99), "KindSans"}, // unrecognized Kind falls back to Sans
 	}
 	for _, c := range cases {

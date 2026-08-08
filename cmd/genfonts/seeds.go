@@ -135,4 +135,15 @@ var seeds = []seed{
 	// MaxTTFBytes override, same as notosanssc above.
 	{Name: "Noto Sans JP", Slug: "notosansjp", TTFFile: "NotoSansJP[wght].ttf", Kind: fonts.KindSans, MaxTTFBytes: 20_000_000, TestRune: 'あ'},
 	{Name: "Noto Sans KR", Slug: "notosanskr", TTFFile: "NotoSansKR[wght].ttf", Kind: fonts.KindSans, MaxTTFBytes: 20_000_000, TestRune: '가'},
+
+	// Emoji. Noto Emoji is the MONOCHROME family: ordinary glyf outlines, so
+	// go-opentype rasterises it like any other face and it composes into an
+	// existing fallback chain for free. Its colour sibling (Noto Color Emoji,
+	// ~24 MB) is deliberately NOT ingested: it stores its glyphs in CBDT/CBLC
+	// bitmap strikes, which go-opentype does not read, so it would parse and
+	// then render nothing at all. TestRune U+1F680 ROCKET proves real
+	// pictograph coverage. The family carries no Latin alphabet, which is
+	// exactly what makes it safe to chain last: it can only ever claim runes a
+	// text face has already declined.
+	{Name: "Noto Emoji", Slug: "notoemoji", TTFFile: "NotoEmoji[wght].ttf", Kind: fonts.KindEmoji, TestRune: '\U0001F680'},
 }
