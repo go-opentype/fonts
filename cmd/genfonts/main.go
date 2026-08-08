@@ -229,6 +229,8 @@ func kindConst(k fonts.Kind) string {
 		return "KindMono"
 	case fonts.KindDisplay:
 		return "KindDisplay"
+	case fonts.KindEmoji:
+		return "KindEmoji"
 	default:
 		return "KindSans"
 	}
