@@ -84,6 +84,13 @@ bundled CJK families — Noto Sans SC (added in v0.4.0), plus Noto Sans JP
 and KR (added in v0.4.2), and for Noto Emoji (added in v0.6.0). Every
 other family covers Latin, and most also cover Cyrillic and/or Greek.
 
+Most families bundle a single Regular face. **Go**, **Inter** and **Lora** also
+bundle their other styles in the same package, as `BoldTTF`, `ItalicTTF` and
+`BoldItalicTTF` alongside `TTF`. These are genuine, separately drawn faces: text
+set in a designed bold has the proportions its designers intended, which
+over-striking a Regular can only approximate. Reach for them whenever you need a
+weight, rather than synthesising one.
+
 **Noto Emoji** is the one family whose `Kind` is `emoji` rather than a
 letterform style, and it is the *monochrome* Noto family, not the colour one:
 its glyphs are ordinary `glyf` outlines, so go-opentype rasterises them like
