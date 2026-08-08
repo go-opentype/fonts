@@ -81,7 +81,7 @@ forty-one were ingested by [`cmd/genfonts`](#generator-cmdgenfonts) from
 [google/fonts](https://github.com/google/fonts)'s `ofl/` directory. Script
 is listed for the seven non-Latin families (added in v0.3.0) and for the
 bundled CJK families — Noto Sans SC (added in v0.4.0), plus Noto Sans JP
-and KR (added in v0.4.2), and for Noto Emoji (added in v0.5.0). Every
+and KR (added in v0.4.2), and for Noto Emoji (added in v0.6.0). Every
 other family covers Latin, and most also cover Cyrillic and/or Greek.
 
 **Noto Emoji** is the one family whose `Kind` is `emoji` rather than a
