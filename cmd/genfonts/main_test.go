@@ -141,12 +141,57 @@ func TestKindConst(t *testing.T) {
 		{fonts.KindMono, "KindMono"},
 		{fonts.KindDisplay, "KindDisplay"},
 		{fonts.KindEmoji, "KindEmoji"},
-		{fonts.Kind(99), "KindSans"}, // unrecognized Kind falls back to Sans
 	}
 	for _, c := range cases {
-		if got := kindConst(c.k); got != c.want {
+		got, err := kindConst(c.k)
+		if err != nil {
+			t.Errorf("kindConst(%v): unexpected error %v", c.k, err)
+			continue
+		}
+		if got != c.want {
 			t.Errorf("kindConst(%v) = %q, want %q", c.k, got, c.want)
 		}
+	}
+}
+
+// TestKindConstRejectsUnknown pins the behaviour that matters: an unhandled Kind
+// must FAIL, not fall back. The old default silently rendered "KindSans", so
+// adding a Kind and forgetting its case here wrote a registry that confidently
+// mislabelled the new family — which is how KindEmoji first shipped as sans.
+func TestKindConstRejectsUnknown(t *testing.T) {
+	got, err := kindConst(fonts.Kind(99))
+	if err == nil {
+		t.Fatalf("kindConst(99) = %q with no error; an unhandled Kind must fail", got)
+	}
+	if got != "" {
+		t.Fatalf("kindConst(99) returned %q alongside its error; want no identifier at all", got)
+	}
+	if !strings.Contains(err.Error(), "kindConst") {
+		t.Errorf("error %q should name the function to fix", err)
+	}
+}
+
+// TestRunFailsOnUnhandledKind proves the error reaches the top: a seed whose
+// Kind cannot be rendered must abort the whole run rather than write a
+// generated.go that mislabels the family.
+func TestRunFailsOnUnhandledKind(t *testing.T) {
+	ts := newGenTestServer(t)
+	oldBase := googleFontsRawBase
+	googleFontsRawBase = ts.URL
+	defer func() { googleFontsRawBase = oldBase }()
+
+	root := t.TempDir()
+	// "good1" fetches and writes fine; only its Kind is unrepresentable, so the
+	// failure can come from nowhere but kindConst.
+	_, err := run(root, []seed{testSeed("Good1", "good1", "good1-Regular.ttf", fonts.Kind(99))})
+	if err == nil {
+		t.Fatal("run with an unhandled Kind must fail")
+	}
+	if !strings.Contains(err.Error(), "Good1") {
+		t.Errorf("error %q should name the offending seed", err)
+	}
+	if !strings.Contains(err.Error(), "kindConst") {
+		t.Errorf("error %q should name the function to fix", err)
 	}
 }
 

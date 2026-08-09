@@ -163,9 +163,13 @@ func run(root string, seedList []seed) ([]result, error) {
 		r.glyphs = font.NumGlyphs()
 		results = append(results, r)
 
+		kind, err := kindConst(s.Kind)
+		if err != nil {
+			return nil, fmt.Errorf("seed %q: %w", s.Name, err)
+		}
 		families = append(families, familyEntry{
 			Name:       s.Name,
-			Kind:       kindConst(s.Kind),
+			Kind:       kind,
 			ImportPath: "github.com/go-opentype/fonts/" + s.Slug,
 		})
 	}
@@ -219,20 +223,27 @@ func extractCopyright(oflText string) string {
 // kindConst renders k as a bare identifier (KindSans, not fonts.KindSans):
 // generated.go is itself part of package fonts, so its Kind literals must
 // not be package-qualified.
-func kindConst(k fonts.Kind) string {
+//
+// An unhandled Kind is an ERROR, never a default. This used to fall back to
+// "KindSans", which meant adding a Kind to the fonts package and forgetting to
+// add it here produced a registry that confidently mislabelled the new family —
+// a wrong answer written to a generated file and committed. KindEmoji was
+// mislabelled exactly that way before anyone noticed. Failing the run instead
+// makes the omission impossible to miss and impossible to ship.
+func kindConst(k fonts.Kind) (string, error) {
 	switch k {
 	case fonts.KindSans:
-		return "KindSans"
+		return "KindSans", nil
 	case fonts.KindSerif:
-		return "KindSerif"
+		return "KindSerif", nil
 	case fonts.KindMono:
-		return "KindMono"
+		return "KindMono", nil
 	case fonts.KindDisplay:
-		return "KindDisplay"
+		return "KindDisplay", nil
 	case fonts.KindEmoji:
-		return "KindEmoji"
+		return "KindEmoji", nil
 	default:
-		return "KindSans"
+		return "", fmt.Errorf("unhandled fonts.Kind %d (%q): add its case to kindConst", int(k), k)
 	}
 }
 
