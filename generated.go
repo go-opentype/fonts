@@ -49,6 +49,7 @@ var generated = []Family{
 	{Name: "Source Code Pro", Kind: KindMono, License: "OFL-1.1", ImportPath: "github.com/go-opentype/fonts/sourcecodepro"},
 	{Name: "Source Sans 3", Kind: KindSans, License: "OFL-1.1", ImportPath: "github.com/go-opentype/fonts/sourcesans3"},
 	{Name: "Space Mono", Kind: KindMono, License: "OFL-1.1", ImportPath: "github.com/go-opentype/fonts/spacemono"},
+	{Name: "Tinos", Kind: KindSerif, License: "OFL-1.1", ImportPath: "github.com/go-opentype/fonts/tinos"},
 	{Name: "Titillium Web", Kind: KindSans, License: "OFL-1.1", ImportPath: "github.com/go-opentype/fonts/titilliumweb"},
 	{Name: "Work Sans", Kind: KindSans, License: "OFL-1.1", ImportPath: "github.com/go-opentype/fonts/worksans"},
 }

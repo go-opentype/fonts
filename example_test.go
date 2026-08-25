@@ -47,7 +47,7 @@ func ExampleAll() {
 	fmt.Println("bundled families:", len(all))
 	fmt.Println(all[0].Name, all[0].Kind, all[0].License)
 	// Output:
-	// bundled families: 47
+	// bundled families: 48
 	// Atkinson Hyperlegible sans OFL-1.1
 }
 

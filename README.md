@@ -7,7 +7,7 @@
 ![go](https://img.shields.io/badge/Go-1.26.4%2B-00ADD8?logo=go&logoColor=white)
 [![License](https://img.shields.io/badge/code%20license-BSD--3--Clause-blue.svg)](LICENSE)
 
-47 legible, permissively-licensed TrueType fonts, one Go subpackage per
+48 legible, permissively-licensed TrueType fonts, one Go subpackage per
 family, each with its own `//go:embed` — no downloading, no sourcing a
 `.ttf` yourself, and **your binary links only the families you import**.
 Coverage spans Latin, Cyrillic and Greek plus seven non-Latin scripts —
@@ -44,8 +44,8 @@ face := f.NewFace(16)            // 16px face
 
 `//go:embed` is eager *per package*: any package that embeds a font links
 that font's bytes into every binary that imports it, whether or not the
-binary ever uses it. A `fonts` package that bulk-embedded all 47 families
-would put all 47 into your binary the moment you imported it for anything
+binary ever uses it. A `fonts` package that bulk-embedded all 48 families
+would put all 48 into your binary the moment you imported it for anything
 at all.
 
 So the root `fonts` package doesn't do that. Each family lives in its own
@@ -272,10 +272,17 @@ Run it from the module root:
 GOWORK=off go run ./cmd/genfonts
 ```
 
-The last run ingested 40 of 42 seeded families; **Merriweather** (its only
-shipped `.ttf` is a ~4.6 MB multi-axis variable font, over the default size
-cap) and **Tinos** (its `google/fonts` directory currently ships no
-`OFL.txt`) were skipped. Ubuntu is deliberately not seeded at all: it ships
+The last run ingested 42 of 43 seeded families; only **Merriweather** was
+skipped — its only shipped `.ttf` is a ~4.6 MB multi-axis variable font, over
+the default size cap.
+
+**Tinos** used to be skipped too: its `google/fonts` directory ships no
+`OFL.txt`, though its `METADATA.pb` names the licence. Bundling a font without
+its licence is not an option and neither is bundling somebody else's, so a
+seed may now say where the real text is — for Tinos, the upstream project's
+own repository. It matters because Tinos, Arimo and Cousine are the three
+metric-compatible stand-ins for Times, Helvetica and Courier, and a PDF that
+names one of those and embeds nothing needs all three. Ubuntu is deliberately not seeded at all: it ships
 under the Ubuntu Font License (UFL), not OFL, outside this generator's
 scope. Noto Sans TC, JP and KR are also deliberately not seeded — see
 [Non-Latin scripts, and CJK coverage](#non-latin-scripts-and-cjk-coverage)

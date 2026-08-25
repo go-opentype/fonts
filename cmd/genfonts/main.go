@@ -5,7 +5,9 @@
 // Command genfonts ingests OFL-licensed font families from
 // github.com/google/fonts and generates a github.com/go-opentype/fonts
 // subpackage for each one that survives validation: it fetches the
-// family's .ttf and OFL.txt over plain net/http, confirms the .ttf decodes
+// family's .ttf and OFL.txt over plain net/http — the license from the
+// family's own directory, or from wherever the seed says it really is for the
+// handful of families that ship none beside the font — confirms the .ttf decodes
 // through github.com/go-opentype/opentype (skipping and logging any family
 // that fails to parse, is missing its license file, or exceeds the size
 // cap), and writes:
@@ -139,7 +141,10 @@ func run(root string, seedList []seed) ([]result, error) {
 			continue
 		}
 
-		oflURL := rawURL(s.Slug, "OFL.txt")
+		oflURL := s.LicenseURL
+		if oflURL == "" {
+			oflURL = rawURL(s.Slug, "OFL.txt")
+		}
 		oflBytes, status, err := fetch(oflURL)
 		if err != nil {
 			r.reason = fmt.Sprintf("fetch %s: %v", oflURL, err)
