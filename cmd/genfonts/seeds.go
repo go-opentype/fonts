@@ -21,6 +21,15 @@ type seed struct {
 	// directory.
 	TTFFile string
 	Kind    fonts.Kind
+	// LicenseURL, when set, is where the family's license text is fetched
+	// from instead of its google/fonts directory.
+	//
+	// A handful of families in google/fonts ship no license file beside the
+	// font — their METADATA.pb names the license and the text itself lives in
+	// the upstream project's own repository. Bundling one of those without
+	// its license is not an option, and neither is bundling the license of a
+	// different family, so the seed says where the real one is.
+	LicenseURL string
 	// MaxTTFBytes overrides maxTTFBytes for this seed alone, when non-zero.
 	// Use it for the rare family (e.g. a CJK Noto variant) whose .ttf is
 	// legitimately far larger than the default cap; every other seed
@@ -106,7 +115,10 @@ var seeds = []seed{
 	{Name: "Cabin", Slug: "cabin", TTFFile: "Cabin[wdth,wght].ttf", Kind: fonts.KindSans},
 	{Name: "Titillium Web", Slug: "titilliumweb", TTFFile: "TitilliumWeb-Regular.ttf", Kind: fonts.KindSans},
 	{Name: "Arimo", Slug: "arimo", TTFFile: "Arimo[wght].ttf", Kind: fonts.KindSans},
-	{Name: "Tinos", Slug: "tinos", TTFFile: "Tinos-Regular.ttf", Kind: fonts.KindSerif},
+	// Tinos's google/fonts directory ships no OFL.txt; its METADATA.pb names
+	// the license and the text is in the upstream project.
+	{Name: "Tinos", Slug: "tinos", TTFFile: "Tinos-Regular.ttf", Kind: fonts.KindSerif,
+		LicenseURL: "https://raw.githubusercontent.com/googlefonts/tinos/main/OFL.txt"},
 	{Name: "Cousine", Slug: "cousine", TTFFile: "Cousine-Regular.ttf", Kind: fonts.KindMono},
 
 	// Non-Latin script families: RTL (Arabic, Hebrew), Indic (Devanagari),
