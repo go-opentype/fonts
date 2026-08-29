@@ -1,2 +1,4 @@
 github.com/go-opentype/opentype v0.1.0 h1:ok3QZb2t1xjIOhDaqtvOhZ/rCvY62ng927ckygfrbQg=
 github.com/go-opentype/opentype v0.1.0/go.mod h1:AOixevJf7XQaH7+WG+OMIOZEbYPXfMqklVk26Y6YTUU=
+github.com/go-opentype/opentype v0.12.0 h1:wBlcDi+3ZaNZXEt5z+Ixr11/cYYwi5W+jX6yTl/qr1I=
+github.com/go-opentype/opentype v0.12.0/go.mod h1:AOixevJf7XQaH7+WG+OMIOZEbYPXfMqklVk26Y6YTUU=
