@@ -62,11 +62,12 @@ func (k Kind) String() string {
 type Family struct {
 	Name       string // display name, e.g. "Atkinson Hyperlegible"
 	Kind       Kind
-	License    string // SPDX identifier: "OFL-1.1" or "BSD-3-Clause"
+	License    string // SPDX identifier: "OFL-1.1", "BSD-3-Clause" or "Bitstream-Vera"
 	ImportPath string // e.g. "github.com/go-opentype/fonts/inter"
 }
 
-// curated lists the families that have shipped since v0.1.0. Their
+// curated lists the hand-maintained families: the six that have shipped
+// since v0.1.0, plus DejaVu Sans, the last-resort fallback face. Their
 // ImportPath subpackages are hand-maintained, not generator output.
 var curated = []Family{
 	{Name: "Atkinson Hyperlegible", Kind: KindSans, License: "OFL-1.1", ImportPath: "github.com/go-opentype/fonts/atkinsonhyperlegible"},
@@ -75,6 +76,7 @@ var curated = []Family{
 	{Name: "Lora", Kind: KindSerif, License: "OFL-1.1", ImportPath: "github.com/go-opentype/fonts/lora"},
 	{Name: "Go Mono", Kind: KindMono, License: "BSD-3-Clause", ImportPath: "github.com/go-opentype/fonts/gomono"},
 	{Name: "JetBrains Mono", Kind: KindMono, License: "OFL-1.1", ImportPath: "github.com/go-opentype/fonts/jetbrainsmono"},
+	{Name: "DejaVu Sans", Kind: KindSans, License: "Bitstream-Vera", ImportPath: "github.com/go-opentype/fonts/dejavusans"},
 }
 
 // All returns every bundled Family, curated families first (in their

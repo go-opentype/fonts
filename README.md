@@ -6,14 +6,16 @@
 ![go](https://img.shields.io/badge/Go-1.26.4%2B-00ADD8?logo=go&logoColor=white)
 [![License](https://img.shields.io/badge/code%20license-BSD--3--Clause-blue.svg)](LICENSE)
 
-48 legible, permissively-licensed TrueType fonts, one Go subpackage per
+49 legible, permissively-licensed TrueType fonts, one Go subpackage per
 family, each with its own `//go:embed` — no downloading, no sourcing a
 `.ttf` yourself, and **your binary links only the families you import**.
 Coverage spans Latin, Cyrillic and Greek plus seven non-Latin scripts —
 Arabic and Hebrew (RTL), Devanagari, Thai, Georgian, Armenian and Egyptian
 Hieroglyphs — for RTL and non-Latin rendering/testing out of the box — plus
 Noto Sans SC, JP and KR for CJK (Han ideographs, kana, Hangul and common
-CJK punctuation), plus Noto Emoji for pictographs.
+CJK punctuation), plus Noto Emoji for pictographs, plus DejaVu Sans as a
+last-resort fallback for the arrows, mathematical operators, box drawing,
+geometric shapes, circled digits, dingbats and braille a text face lacks.
 Built for [go-opentype/opentype](https://github.com/go-opentype/opentype),
 the pure-Go, stdlib-only TrueType engine, but the raw bytes work with any
 parser that accepts a `.ttf`.
@@ -43,8 +45,8 @@ face := f.NewFace(16)            // 16px face
 
 `//go:embed` is eager *per package*: any package that embeds a font links
 that font's bytes into every binary that imports it, whether or not the
-binary ever uses it. A `fonts` package that bulk-embedded all 48 families
-would put all 48 into your binary the moment you imported it for anything
+binary ever uses it. A `fonts` package that bulk-embedded all 49 families
+would put all 49 into your binary the moment you imported it for anything
 at all.
 
 So the root `fonts` package doesn't do that. Each family lives in its own
@@ -75,16 +77,16 @@ The root `fonts` package holds two things only:
 
 ## Bundled fonts
 
-Six families are hand-curated (present since v0.1.0); the other
-forty-one were ingested by [`cmd/genfonts`](#generator-cmdgenfonts) from
+Seven families are hand-curated — six present since v0.1.0, plus DejaVu
+Sans, the last-resort fallback — and the other forty-two were ingested by [`cmd/genfonts`](#generator-cmdgenfonts) from
 [google/fonts](https://github.com/google/fonts)'s `ofl/` directory. Script
 is listed for the seven non-Latin families (added in v0.3.0) and for the
 bundled CJK families — Noto Sans SC (added in v0.4.0), plus Noto Sans JP
 and KR (added in v0.4.2), and for Noto Emoji (added in v0.6.0). Every
 other family covers Latin, and most also cover Cyrillic and/or Greek.
 
-Most families bundle a single Regular face. **Go**, **Go Mono**, **Inter** and
-**Lora** also bundle their other styles in the same package, as `BoldTTF`,
+Most families bundle a single Regular face. **Go**, **Go Mono**, **Inter**,
+**Lora** and **DejaVu Sans** also bundle their other styles in the same package, as `BoldTTF`,
 `ItalicTTF` and `BoldItalicTTF` alongside `TTF`. These are genuine, separately drawn faces: text
 set in a designed bold has the proportions its designers intended, which
 over-striking a Regular can only approximate. Reach for them whenever you need a
@@ -102,6 +104,22 @@ ten digits, space, `(c)` and `(r)` — the bases of the keycap emoji sequences �
 but a text face covers all fifteen, so the emoji face is never reached for
 them.)
 
+**DejaVu Sans** is bundled for coverage, not looks: it is the broad-coverage
+sans-serif Linux desktops fall back to, and it exists here so a renderer that
+sets text in Inter, Lora or Go Mono has somewhere to send the characters
+those families lack — a browser falls back to a system font per character,
+and a self-contained Go stack needs a bundled equivalent. Its Regular face
+maps 5,918 code points: all of Latin (through IPA), Greek, Cyrillic, most of
+Armenian and Georgian, and every code point of Arrows, Mathematical
+Operators, Box Drawing, Block Elements, Geometric Shapes and Braille
+Patterns, plus most of Dingbats and Miscellaneous Symbols. Chain it *after*
+the faces you chose and *before* Noto Emoji. One limit worth knowing: of the
+Enclosed Alphanumerics it maps only the circled digits ① to ⑩ — no ⑪ onward,
+no circled letters — and its test pins that. It ships under the Bitstream
+Vera licence (with DejaVu's additions in the public domain), not the OFL;
+the four faces are byte-for-byte the upstream 2.37 release, with SHA-256
+hashes recorded in the package doc.
+
 | Name                  | Kind   | License        | Script              | Import path                                       |
 |------------------------|--------|-----------------|----------------------|----------------------------------------------------|
 | Atkinson Hyperlegible  | Sans   | OFL-1.1         | Latin                | `github.com/go-opentype/fonts/atkinsonhyperlegible` |
@@ -110,6 +128,7 @@ them.)
 | Lora                   | Serif  | OFL-1.1         | Latin                | `github.com/go-opentype/fonts/lora`                 |
 | Go Mono                | Mono   | BSD-3-Clause    | Latin                | `github.com/go-opentype/fonts/gomono`               |
 | JetBrains Mono         | Mono   | OFL-1.1         | Latin                | `github.com/go-opentype/fonts/jetbrainsmono`        |
+| DejaVu Sans            | Sans   | Bitstream-Vera  | Latin/Greek/Cyrillic + symbols (fallback) | `github.com/go-opentype/fonts/dejavusans`           |
 | Arimo                  | Sans   | OFL-1.1         | Latin                | `github.com/go-opentype/fonts/arimo`                |
 | Bitter                 | Serif  | OFL-1.1         | Latin                | `github.com/go-opentype/fonts/bitter`               |
 | Cabin                  | Sans   | OFL-1.1         | Latin                | `github.com/go-opentype/fonts/cabin`                |
@@ -155,7 +174,8 @@ them.)
 Full license texts are bundled verbatim under [`licenses/`](licenses/), one
 file per family (SIL Open Font License 1.1 for every `OFL-1.1` row, plus
 `GoFonts-LICENSE.txt` — BSD-3-Clause, Bigelow & Holmes — shared by Go and Go
-Mono).
+Mono, and `DejaVuSans-LICENSE.txt` — the Bitstream Vera licence, with
+DejaVu's additions in the public domain).
 
 ### Non-Latin scripts, and CJK coverage
 
@@ -225,7 +245,7 @@ const (
 type Family struct {
 	Name       string // e.g. "Inter"
 	Kind       Kind
-	License    string // SPDX id: "OFL-1.1" or "BSD-3-Clause"
+	License    string // SPDX id: "OFL-1.1", "BSD-3-Clause" or "Bitstream-Vera"
 	ImportPath string // e.g. "github.com/go-opentype/fonts/inter"
 }
 
@@ -306,8 +326,8 @@ stack:
   complex-script shaper (Arabic, Indic, Hangul, USE, Egyptian
   hieroglyphs, ...) built on `opentype`'s GSUB/GPOS engine; several of its
   real-font tests and examples use the non-Latin families bundled here.
-- **[fonts](https://github.com/go-opentype/fonts)** (this repo) — the 46
-  bundled OFL/BSD font families.
+- **[fonts](https://github.com/go-opentype/fonts)** (this repo) — the 49
+  bundled font families (OFL, BSD and Bitstream Vera).
 
 ## License
 

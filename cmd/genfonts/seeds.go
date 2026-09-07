@@ -55,7 +55,9 @@ type seed struct {
 // Atkinson Hyperlegible, Inter, Go, Lora, Go Mono and JetBrains Mono are
 // intentionally NOT listed here: they are hand-curated subpackages that
 // predate this generator (see /atkinsonhyperlegible, /inter, /goregular,
-// /lora, /gomono, /jetbrainsmono) and are not regenerated.
+// /lora, /gomono, /jetbrainsmono) and are not regenerated. DejaVu Sans
+// (/dejavusans) is hand-curated too: it is not a google/fonts family, and it
+// ships under the Bitstream Vera licence rather than the OFL.
 //
 // Ubuntu is intentionally excluded even though it is a popular Google Fonts
 // family: it ships under the Ubuntu Font License (UFL), not OFL, and lives

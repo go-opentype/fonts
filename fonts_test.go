@@ -31,7 +31,7 @@ func TestAllNonEmptyAndValid(t *testing.T) {
 		}
 		seen[strings.ToLower(f.Name)] = true
 
-		if f.License != "OFL-1.1" && f.License != "BSD-3-Clause" {
+		if f.License != "OFL-1.1" && f.License != "BSD-3-Clause" && f.License != "Bitstream-Vera" {
 			t.Errorf("%s: unexpected license %q", f.Name, f.License)
 		}
 		if !strings.HasPrefix(f.ImportPath, "github.com/go-opentype/fonts/") {
