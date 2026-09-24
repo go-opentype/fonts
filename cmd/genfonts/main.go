@@ -76,8 +76,14 @@ var httpClient = &http.Client{Timeout: 30 * time.Second}
 var osExit = os.Exit
 
 func main() {
-	root := rootFromArgs(os.Args)
-	results, err := run(root, seeds)
+	root, only := rootFromArgs(os.Args)
+	list, err := selectSeeds(seeds, only)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "genfonts: %v\n", err)
+		osExit(1)
+		return
+	}
+	results, err := run(root, list, len(only) == 0)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "genfonts: %v\n", err)
 		osExit(1)
@@ -86,13 +92,57 @@ func main() {
 	printSummary(results)
 }
 
-// rootFromArgs returns args[1] (the output directory) if present, else the
-// current directory.
-func rootFromArgs(args []string) string {
-	if len(args) > 1 {
-		return args[1]
+// rootFromArgs returns the output directory (args[1] when it is not a flag,
+// else the current directory) and the slugs named by any -only flags.
+//
+// -only exists so that adding a face to one family does not refetch the other
+// forty-two over the network. A family that upstream has moved or renamed
+// since the last run would otherwise be dropped from the registry by a run
+// that had nothing to do with it.
+func rootFromArgs(args []string) (root string, only []string) {
+	root = "."
+	for i := 1; i < len(args); i++ {
+		a := args[i]
+		switch {
+		case strings.HasPrefix(a, "-only="):
+			only = append(only, strings.Split(strings.TrimPrefix(a, "-only="), ",")...)
+		case a == "-only" && i+1 < len(args):
+			i++
+			only = append(only, strings.Split(args[i], ",")...)
+		case !strings.HasPrefix(a, "-"):
+			root = a
+		}
 	}
-	return "."
+	return root, only
+}
+
+// selectSeeds narrows the seed list to the slugs named, and refuses a name
+// that matches none: a typo that silently regenerated nothing would look
+// exactly like a run that worked.
+func selectSeeds(all []seed, only []string) ([]seed, error) {
+	if len(only) == 0 {
+		return all, nil
+	}
+	want := map[string]bool{}
+	for _, s := range only {
+		want[strings.TrimSpace(s)] = true
+	}
+	var out []seed
+	for _, s := range all {
+		if want[s.Slug] {
+			out = append(out, s)
+			delete(want, s.Slug)
+		}
+	}
+	if len(want) > 0 {
+		missing := make([]string, 0, len(want))
+		for k := range want {
+			missing = append(missing, k)
+		}
+		sort.Strings(missing)
+		return nil, fmt.Errorf("-only names no seed: %s", strings.Join(missing, ", "))
+	}
+	return out, nil
 }
 
 // result records the outcome of processing one seed, for the end-of-run
@@ -105,11 +155,15 @@ type result struct {
 	glyphs int
 }
 
-// run fetches, validates and writes a subpackage for every seed in
-// seedList, then regenerates <root>/generated.go from whichever seeds
-// succeeded. It returns one result per seed (success or the reason it was
-// skipped) and only errors if generated.go itself could not be written.
-func run(root string, seedList []seed) ([]result, error) {
+// run fetches, validates and writes a subpackage for every seed in seedList,
+// and regenerates <root>/generated.go from whichever seeds succeeded when
+// registry is true. It returns one result per seed (success or the reason it
+// was skipped) and only errors if generated.go itself could not be written.
+//
+// registry is false for a partial run, because generated.go is written from
+// the seeds that SUCCEEDED: writing it after a run of three would drop the
+// other forty from the registry.
+func run(root string, seedList []seed, registry bool) ([]result, error) {
 	var results []result
 	var families []familyEntry
 
@@ -157,7 +211,12 @@ func run(root string, seedList []seed) ([]result, error) {
 			continue
 		}
 
-		if err := writeSubpackage(root, s, ttf, oflBytes); err != nil {
+		styles, skipped := fetchStyles(s)
+		for _, why := range skipped {
+			fmt.Fprintf(os.Stderr, "genfonts: %s: %s\n", s.Name, why)
+		}
+
+		if err := writeSubpackage(root, s, ttf, oflBytes, styles); err != nil {
 			r.reason = fmt.Sprintf("write subpackage: %v", err)
 			results = append(results, r)
 			continue
@@ -179,11 +238,48 @@ func run(root string, seedList []seed) ([]result, error) {
 		})
 	}
 
-	if err := writeGenerated(root, families); err != nil {
-		return nil, fmt.Errorf("write generated.go: %w", err)
+	if registry {
+		if err := writeGenerated(root, families); err != nil {
+			return nil, fmt.Errorf("write generated.go: %w", err)
+		}
 	}
 
 	return results, nil
+}
+
+// fetchStyles fetches the faces a seed names beside its regular one, and says
+// which it could not get. A style that will not fetch or will not parse is
+// dropped with a reason rather than failing the family: a package with a
+// regular and an italic is worth having when the bold is gone, and a package
+// that names a face whose bytes are missing does not compile.
+func fetchStyles(s seed) (out []fetchedStyle, skipped []string) {
+	for _, st := range s.Styles {
+		u := rawURL(s.Slug, st.File)
+		b, status, err := fetch(u)
+		switch {
+		case err != nil:
+			skipped = append(skipped, fmt.Sprintf("%s: fetch %s: %v", st.Name, u, err))
+			continue
+		case status != http.StatusOK:
+			skipped = append(skipped, fmt.Sprintf("%s: fetch %s: HTTP %d", st.Name, u, status))
+			continue
+		case len(b) > effectiveMaxTTFBytes(s):
+			skipped = append(skipped, fmt.Sprintf("%s: %d bytes exceeds cap", st.Name, len(b)))
+			continue
+		}
+		if _, err := opentype.Parse(b); err != nil {
+			skipped = append(skipped, fmt.Sprintf("%s: opentype.Parse: %v", st.Name, err))
+			continue
+		}
+		out = append(out, fetchedStyle{style: st, ttf: b})
+	}
+	return out, skipped
+}
+
+// fetchedStyle is one style's seed beside the bytes that were fetched for it.
+type fetchedStyle struct {
+	style style
+	ttf   []byte
 }
 
 // rawURL builds the raw.githubusercontent.com URL for a file inside
@@ -278,7 +374,12 @@ import _ "embed" // for the //go:embed directive below
 //
 //go:embed {{.Slug}}.ttf
 var TTF []byte
-`))
+{{range .Styles}}
+// {{.Name}} holds the raw TrueType bytes of the {{.Lower}} face.
+//
+//go:embed {{.File}}
+var {{.Name}} []byte
+{{end}}`))
 
 var subpackageTestTmpl = template.Must(template.New("subpackage_test").Parse(`// Code generated by cmd/genfonts. DO NOT EDIT.
 
@@ -305,7 +406,29 @@ func TestParse(t *testing.T) {
 		t.Fatalf("NumGlyphs() = %d, want > 0", f.NumGlyphs())
 	}
 }
-{{if .TestRuneChar}}
+{{if .Styles}}
+// TestEveryFaceParses proves the other faces bundled beside TTF load too. A
+// face that is embedded and broken is worse than one that is absent: nothing
+// reads it until a document asks for that weight, and then it fails where a
+// page is being drawn rather than here.
+func TestEveryFaceParses(t *testing.T) {
+	for _, c := range []struct {
+		name string
+		ttf  []byte
+	}{ {{range .Styles}}
+		{"{{.Name}}", {{.Name}}},{{end}}
+	} {
+		f, err := opentype.Parse(c.ttf)
+		if err != nil {
+			t.Errorf("%s: opentype.Parse: %v", c.name, err)
+			continue
+		}
+		if f.NumGlyphs() <= 0 {
+			t.Errorf("%s: NumGlyphs() = %d, want > 0", c.name, f.NumGlyphs())
+		}
+	}
+}
+{{end}}{{if .TestRuneChar}}
 // TestRepresentativeGlyph proves TTF maps and rasterises {{.TestRuneChar}} (U+{{.TestRuneHex}}),
 // a rune this family's script exists to cover — stronger evidence than
 // TestParse's NumGlyphs() check alone.
@@ -343,18 +466,34 @@ type subpackageData struct {
 	// TestRepresentativeGlyph block in subpackageTestTmpl above.
 	TestRuneChar string
 	TestRuneHex  string
+	// Styles are the faces beside the regular one that were fetched and
+	// written. It is what SURVIVED, not what the seed asked for: a family
+	// whose bold could not be fetched gets a package without a Bold rather
+	// than one that will not compile.
+	Styles []styleData
+}
+
+// styleData is one face beside the regular one, as the template needs it.
+type styleData struct {
+	// Name is the exported identifier: Bold, Italic, BoldItalic.
+	Name string
+	// File is the .ttf's name inside the package directory.
+	File string
+	// Lower is Name in words, for the doc comment: "bold", "italic",
+	// "bold italic".
+	Lower string
 }
 
 // writeSubpackage writes the .ttf, .go and _test.go files for one family
 // plus its license, using the real subpackage templates.
-func writeSubpackage(root string, s seed, ttf, oflText []byte) error {
-	return writeSubpackageWithTemplates(root, s, ttf, oflText, subpackageTmpl, subpackageTestTmpl)
+func writeSubpackage(root string, s seed, ttf, oflText []byte, styles []fetchedStyle) error {
+	return writeSubpackageWithTemplates(root, s, ttf, oflText, styles, subpackageTmpl, subpackageTestTmpl)
 }
 
 // writeSubpackageWithTemplates is writeSubpackage with the .go/_test.go
 // templates injectable, so tests can force renderGoFile failures at either
 // call site without needing a malformed font or a broken filesystem.
-func writeSubpackageWithTemplates(root string, s seed, ttf, oflText []byte, tmpl, testTmpl *template.Template) error {
+func writeSubpackageWithTemplates(root string, s seed, ttf, oflText []byte, styles []fetchedStyle, tmpl, testTmpl *template.Template) error {
 	dir := filepath.Join(root, s.Slug)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return err
@@ -374,6 +513,15 @@ func writeSubpackageWithTemplates(root string, s seed, ttf, oflText []byte, tmpl
 		data.TestRuneChar = string(s.TestRune)
 		data.TestRuneHex = fmt.Sprintf("%04X", s.TestRune)
 	}
+	for _, st := range styles {
+		file := s.Slug + "-" + strings.ToLower(st.style.Name) + ".ttf"
+		if err := os.WriteFile(filepath.Join(dir, file), st.ttf, 0o644); err != nil {
+			return err
+		}
+		data.Styles = append(data.Styles, styleData{
+			Name: st.style.Name, File: file, Lower: inWords(st.style.Name),
+		})
+	}
 
 	if err := renderGoFile(filepath.Join(dir, s.Slug+".go"), tmpl, data); err != nil {
 		return err
@@ -392,6 +540,20 @@ func writeSubpackageWithTemplates(root string, s seed, ttf, oflText []byte, tmpl
 	}
 
 	return nil
+}
+
+// inWords turns Bold, Italic and BoldItalic into the words a doc comment
+// wants.
+func inWords(name string) string {
+	switch name {
+	case "BoldItalic":
+		return "bold italic"
+	case "Bold":
+		return "bold"
+	case "Italic":
+		return "italic"
+	}
+	return strings.ToLower(name)
 }
 
 // renderGoFile executes tmpl with data, gofmts the result, and writes it to

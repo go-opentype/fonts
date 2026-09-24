@@ -19,3 +19,18 @@ import _ "embed" // for the //go:embed directive below
 //
 //go:embed tinos.ttf
 var TTF []byte
+
+// Bold holds the raw TrueType bytes of the bold face.
+//
+//go:embed tinos-bold.ttf
+var Bold []byte
+
+// Italic holds the raw TrueType bytes of the italic face.
+//
+//go:embed tinos-italic.ttf
+var Italic []byte
+
+// BoldItalic holds the raw TrueType bytes of the bold italic face.
+//
+//go:embed tinos-bolditalic.ttf
+var BoldItalic []byte

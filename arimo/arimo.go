@@ -24,3 +24,8 @@ import _ "embed" // for the //go:embed directive below
 //
 //go:embed arimo.ttf
 var TTF []byte
+
+// Italic holds the raw TrueType bytes of the italic face.
+//
+//go:embed arimo-italic.ttf
+var Italic []byte

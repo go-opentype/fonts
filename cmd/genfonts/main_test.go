@@ -28,11 +28,11 @@ const validOFL = "Copyright 2020 Test Foundry (https://example.com)\n\n" +
 	"This Font Software is licensed under the SIL Open Font License, Version 1.1.\n"
 
 func TestRootFromArgs(t *testing.T) {
-	if got := rootFromArgs([]string{"genfonts"}); got != "." {
-		t.Errorf("rootFromArgs(no extra args) = %q, want %q", got, ".")
+	if got := rootFromArgsOnlyRoot([]string{"genfonts"}); got != "." {
+		t.Errorf("rootFromArgsOnlyRoot(no extra args) = %q, want %q", got, ".")
 	}
-	if got := rootFromArgs([]string{"genfonts", "/tmp/out"}); got != "/tmp/out" {
-		t.Errorf("rootFromArgs(with arg) = %q, want %q", got, "/tmp/out")
+	if got := rootFromArgsOnlyRoot([]string{"genfonts", "/tmp/out"}); got != "/tmp/out" {
+		t.Errorf("rootFromArgsOnlyRoot(with arg) = %q, want %q", got, "/tmp/out")
 	}
 }
 
@@ -183,7 +183,7 @@ func TestRunFailsOnUnhandledKind(t *testing.T) {
 	root := t.TempDir()
 	// "good1" fetches and writes fine; only its Kind is unrepresentable, so the
 	// failure can come from nowhere but kindConst.
-	_, err := run(root, []seed{testSeed("Good1", "good1", "good1-Regular.ttf", fonts.Kind(99))})
+	_, err := run(root, []seed{testSeed("Good1", "good1", "good1-Regular.ttf", fonts.Kind(99))}, true)
 	if err == nil {
 		t.Fatal("run with an unhandled Kind must fail")
 	}
@@ -219,7 +219,7 @@ func TestWriteSubpackage(t *testing.T) {
 	root := t.TempDir()
 	s := testSeed("Test Family", "testfamily", "TestFamily[wght].ttf", fonts.KindSans)
 
-	if err := writeSubpackage(root, s, validTTF, []byte(validOFL)); err != nil {
+	if err := writeSubpackage(root, s, validTTF, []byte(validOFL), nil); err != nil {
 		t.Fatalf("writeSubpackage: %v", err)
 	}
 
@@ -256,7 +256,7 @@ func TestWriteSubpackageTestRune(t *testing.T) {
 	s := testSeed("CJK Family", "cjkfamily", "CJKFamily[wght].ttf", fonts.KindSans)
 	s.TestRune = '中'
 
-	if err := writeSubpackage(root, s, validTTF, []byte(validOFL)); err != nil {
+	if err := writeSubpackage(root, s, validTTF, []byte(validOFL), nil); err != nil {
 		t.Fatalf("writeSubpackage: %v", err)
 	}
 
@@ -281,7 +281,7 @@ func TestWriteSubpackageNoTestRune(t *testing.T) {
 	root := t.TempDir()
 	s := testSeed("Latin Family", "latinfamily", "LatinFamily-Regular.ttf", fonts.KindSans)
 
-	if err := writeSubpackage(root, s, validTTF, []byte(validOFL)); err != nil {
+	if err := writeSubpackage(root, s, validTTF, []byte(validOFL), nil); err != nil {
 		t.Fatalf("writeSubpackage: %v", err)
 	}
 
@@ -298,7 +298,7 @@ func TestWriteSubpackageNonVariableFont(t *testing.T) {
 	root := t.TempDir()
 	s := testSeed("Plain Family", "plainfamily", "PlainFamily-Regular.ttf", fonts.KindMono)
 
-	if err := writeSubpackage(root, s, validTTF, []byte(validOFL)); err != nil {
+	if err := writeSubpackage(root, s, validTTF, []byte(validOFL), nil); err != nil {
 		t.Fatalf("writeSubpackage: %v", err)
 	}
 	goSrc, err := os.ReadFile(filepath.Join(root, "plainfamily", "plainfamily.go"))
@@ -321,7 +321,7 @@ func TestWriteSubpackageMkdirDirError(t *testing.T) {
 	}
 
 	s := testSeed("X", "sub", "X-Regular.ttf", fonts.KindSans)
-	if err := writeSubpackage(blocked, s, validTTF, []byte(validOFL)); err == nil {
+	if err := writeSubpackage(blocked, s, validTTF, []byte(validOFL), nil); err == nil {
 		t.Fatal("writeSubpackage(blocked root): want error, got nil")
 	}
 }
@@ -340,7 +340,7 @@ func TestWriteSubpackageWriteTTFError(t *testing.T) {
 	defer os.Chmod(dir, 0o755)
 
 	s := testSeed("Y", "readonly", "Y-Regular.ttf", fonts.KindSans)
-	if err := writeSubpackage(root, s, validTTF, []byte(validOFL)); err == nil {
+	if err := writeSubpackage(root, s, validTTF, []byte(validOFL), nil); err == nil {
 		t.Fatal("writeSubpackage(read-only dir): want error, got nil")
 	}
 }
@@ -354,7 +354,7 @@ func TestWriteSubpackageTemplateErrors(t *testing.T) {
 
 	t.Run("go file template fails", func(t *testing.T) {
 		root := t.TempDir()
-		err := writeSubpackageWithTemplates(root, s, validTTF, []byte(validOFL), brokenTmpl, subpackageTestTmpl)
+		err := writeSubpackageWithTemplates(root, s, validTTF, []byte(validOFL), nil, brokenTmpl, subpackageTestTmpl)
 		if err == nil {
 			t.Fatal("want error, got nil")
 		}
@@ -362,7 +362,7 @@ func TestWriteSubpackageTemplateErrors(t *testing.T) {
 
 	t.Run("test file template fails", func(t *testing.T) {
 		root := t.TempDir()
-		err := writeSubpackageWithTemplates(root, s, validTTF, []byte(validOFL), subpackageTmpl, brokenTmpl)
+		err := writeSubpackageWithTemplates(root, s, validTTF, []byte(validOFL), nil, subpackageTmpl, brokenTmpl)
 		if err == nil {
 			t.Fatal("want error, got nil")
 		}
@@ -378,7 +378,7 @@ func TestWriteSubpackageLicensesDirIsFile(t *testing.T) {
 	}
 
 	s := testSeed("W", "wfam", "W-Regular.ttf", fonts.KindSans)
-	if err := writeSubpackage(root, s, validTTF, []byte(validOFL)); err == nil {
+	if err := writeSubpackage(root, s, validTTF, []byte(validOFL), nil); err == nil {
 		t.Fatal("writeSubpackage(licenses/ is a file): want error, got nil")
 	}
 }
@@ -397,7 +397,7 @@ func TestWriteSubpackageLicenseWriteError(t *testing.T) {
 	defer os.Chmod(licensesDir, 0o755)
 
 	s := testSeed("V", "vfam", "V-Regular.ttf", fonts.KindSans)
-	if err := writeSubpackage(root, s, validTTF, []byte(validOFL)); err == nil {
+	if err := writeSubpackage(root, s, validTTF, []byte(validOFL), nil); err == nil {
 		t.Fatal("writeSubpackage(read-only licenses dir): want error, got nil")
 	}
 }
@@ -500,7 +500,7 @@ func TestRunAllBranches(t *testing.T) {
 		testSeed("Blocked Slug", "blockedslug", "blockedslug-Regular.ttf", fonts.KindSans),
 	}
 
-	results, err := run(root, seedList)
+	results, err := run(root, seedList, true)
 	if err != nil {
 		t.Fatalf("run: %v", err)
 	}
@@ -563,7 +563,7 @@ func TestRunTTFNetworkError(t *testing.T) {
 	root := t.TempDir()
 	seedList := []seed{testSeed("Dead", "dead", "Dead-Regular.ttf", fonts.KindSans)}
 
-	results, err := run(root, seedList)
+	results, err := run(root, seedList, true)
 	if err != nil {
 		t.Fatalf("run: %v", err)
 	}
@@ -604,7 +604,7 @@ func TestRunOFLNetworkError(t *testing.T) {
 	root := t.TempDir()
 	seedList := []seed{testSeed("Hijack Ofl", "hijackofl", "hijackofl-Regular.ttf", fonts.KindSans)}
 
-	results, err := run(root, seedList)
+	results, err := run(root, seedList, true)
 	if err != nil {
 		t.Fatalf("run: %v", err)
 	}
@@ -626,8 +626,8 @@ func TestRunWriteGeneratedError(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if _, err := run(blocked, nil); err == nil {
-		t.Fatal("run(unwritable root, no seeds): want error, got nil")
+	if _, err := run(blocked, nil, true); err == nil {
+		t.Fatal("run(unwritable root, no seeds, true): want error, got nil")
 	}
 }
 
@@ -678,4 +678,11 @@ func TestMainError(t *testing.T) {
 	if !exitCalled || exitCode != 1 {
 		t.Errorf("exitCalled = %v, exitCode = %d, want true, 1", exitCalled, exitCode)
 	}
+}
+
+// rootFromArgsOnlyRoot is rootFromArgs for the tests that predate -only and
+// care about the root alone.
+func rootFromArgsOnlyRoot(args []string) string {
+	root, _ := rootFromArgs(args)
+	return root
 }
