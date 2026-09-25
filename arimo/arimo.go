@@ -9,10 +9,9 @@
 // License: OFL-1.1. Copyright 2026 The Arimo Project Authors (https://github.com/googlefonts/arimo)
 // Upstream: https://github.com/google/fonts/tree/main/ofl/arimo
 //
-// Arimo is a variable font upstream; the bundled .ttf is pinned at its
-// default master (static instance). go-opentype has no variable-font
-// support, so it always renders that default instance — OpenType
-// Variations axes are not applied.
+// Arimo is a variable font upstream and the bundled arimo.ttf is that
+// variable file. Face returns its default master; Font.Instance bakes any
+// other point on its axes into a static font.
 //
 // Importing this package links only Arimo into your binary. No other
 // bundled family is compiled in unless you import its package too.
@@ -25,7 +24,21 @@ import _ "embed" // for the //go:embed directive below
 //go:embed arimo.ttf
 var TTF []byte
 
+// Bold holds the raw TrueType bytes of the bold face: a static
+// instance baked at wght 700 out of Arimo[wght].ttf, since upstream ships no file
+// for this weight, only the axis it sits on.
+//
+//go:embed arimo-bold.ttf
+var Bold []byte
+
 // Italic holds the raw TrueType bytes of the italic face.
 //
 //go:embed arimo-italic.ttf
 var Italic []byte
+
+// BoldItalic holds the raw TrueType bytes of the bold italic face: a static
+// instance baked at wght 700 out of Arimo-Italic[wght].ttf, since upstream ships no file
+// for this weight, only the axis it sits on.
+//
+//go:embed arimo-bolditalic.ttf
+var BoldItalic []byte

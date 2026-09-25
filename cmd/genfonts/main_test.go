@@ -18,7 +18,9 @@ import (
 	"text/template"
 
 	"github.com/go-opentype/fonts"
+	"github.com/go-opentype/fonts/arimo"
 	"github.com/go-opentype/fonts/atkinsonhyperlegible"
+	"github.com/go-opentype/opentype"
 )
 
 // validTTF is a real, small, already-shipped font used as a stand-in for
@@ -964,5 +966,191 @@ func TestWriteSubpackageStyleWriteError(t *testing.T) {
 	styles := []fetchedStyle{{style: style{Name: "Bold", File: "styled-Bold.ttf"}, ttf: validTTF}}
 	if err := writeSubpackage(root, s, validTTF, []byte(validOFL), styles); err == nil {
 		t.Fatal("writeSubpackage(style path is a directory): want error, got nil")
+	}
+}
+
+// variableTTF is a real variable font with one wght axis running 400..700,
+// for the tests about baking a face out of an axis. A synthetic fixture would
+// not do: the point of instancing is that it reads gvar and HVAR.
+var variableTTF = arimo.TTF
+
+func TestOffDefault(t *testing.T) {
+	vf, err := opentype.Parse(variableTTF)
+	if err != nil {
+		t.Fatal(err)
+	}
+	static, err := opentype.Parse(validTTF)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range []struct {
+		name string
+		font *opentype.Font
+		at   map[string]float64
+		want string // "" means: go ahead and bake
+	}{
+		{"a real weight", vf, map[string]float64{"wght": 700}, ""},
+		{"the default weight", vf, map[string]float64{"wght": 400}, "default position"},
+		{"past the axis", vf, map[string]float64{"wght": 900}, "outside the font's"},
+		{"below the axis", vf, map[string]float64{"wght": 100}, "outside the font's"},
+		{"an axis it has not got", vf, map[string]float64{"wdth": 75}, `no "wdth" axis`},
+		{"a font with no axes at all", static, map[string]float64{"wght": 700}, `no "wght" axis`},
+	} {
+		got := offDefault(c.font, c.at)
+		switch {
+		case c.want == "" && got != "":
+			t.Errorf("%s: refused with %q, want it baked", c.name, got)
+		case c.want != "" && !strings.Contains(got, c.want):
+			t.Errorf("%s: %q, want it to mention %q", c.name, got, c.want)
+		}
+	}
+}
+
+// TestFetchStylesBakesAFaceOutOfAnAxis. Arimo's bold is a position on its wght
+// axis and upstream ships no file holding it, so the only way to bundle a bold
+// is to write that file.
+func TestFetchStylesBakesAFaceOutOfAnAxis(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Write(variableTTF)
+	}))
+	defer ts.Close()
+	oldBase := googleFontsRawBase
+	googleFontsRawBase = ts.URL
+	defer func() { googleFontsRawBase = oldBase }()
+
+	s := testSeed("Var Family", "varfam", "Var[wght].ttf", fonts.KindSans)
+	s.MaxTTFBytes = len(variableTTF) + 1
+	s.Styles = []style{
+		{Name: "Bold", File: "Var[wght].ttf", At: map[string]float64{"wght": 700}},
+		{Name: "Italic", File: "Var-Italic[wght].ttf"},
+		// A bake at the position the font already sits on is a no-op that
+		// would bundle the regular weight under this name.
+		{Name: "Black", File: "Var[wght].ttf", At: map[string]float64{"wght": 400}},
+	}
+	got, skipped := fetchStyles(s)
+	if len(got) != 2 {
+		t.Fatalf("kept %d styles, want Bold and Italic: %v", len(got), skipped)
+	}
+	if len(skipped) != 1 || !strings.Contains(skipped[0], "default position") {
+		t.Errorf("skipped = %v, want just the no-op bake", skipped)
+	}
+
+	bold, italic := got[0], got[1]
+	if bold.style.Name != "Bold" || italic.style.Name != "Italic" {
+		t.Fatalf("kept %q and %q, want Bold and Italic", bold.style.Name, italic.style.Name)
+	}
+	// The italic was not asked to be baked, so it is the bytes as fetched.
+	if !bytes.Equal(italic.ttf, variableTTF) {
+		t.Error("a face with no At was rewritten anyway")
+	}
+	// The bold was, so it is a static font -- and a different weight, which
+	// is the part a font that merely parses does not prove.
+	bf, err := opentype.Parse(bold.ttf)
+	if err != nil {
+		t.Fatalf("the baked face does not parse: %v", err)
+	}
+	if axes := bf.Axes(); len(axes) != 0 {
+		t.Errorf("the baked face still has %d axes, so nothing was baked", len(axes))
+	}
+	vf, err := opentype.Parse(variableTTF)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// 'm' is 833/1000 em in Helvetica and 889 in Helvetica-Bold, and Arimo is
+	// metric-compatible with both: the advance is how you tell the weights
+	// apart, and it is what HVAR carries.
+	adv := func(f *opentype.Font) float64 {
+		gid, ok := f.GlyphIndex('m')
+		if !ok {
+			t.Fatal("'m' is not mapped")
+		}
+		return float64(f.GlyphAdvance(gid)) * 1000 / float64(f.UnitsPerEm())
+	}
+	if regular, baked := adv(vf), adv(bf); baked <= regular+1 {
+		t.Errorf("'m' advance: default master %.1f, baked face %.1f -- the baked face is not a heavier weight", regular, baked)
+	}
+}
+
+func TestAxisWords(t *testing.T) {
+	for _, c := range []struct {
+		at   map[string]float64
+		want string
+	}{
+		{nil, ""},
+		{map[string]float64{}, ""},
+		{map[string]float64{"wght": 700}, "wght 700"},
+		{map[string]float64{"wght": 87.5}, "wght 87.5"},
+		// Sorted by tag, so regenerating an unchanged family produces an
+		// unchanged file whatever order the map ranges in.
+		{map[string]float64{"wght": 700, "wdth": 75, "opsz": 14}, "opsz 14, wdth 75, wght 700"},
+	} {
+		if got := axisWords(c.at); got != c.want {
+			t.Errorf("axisWords(%v) = %q, want %q", c.at, got, c.want)
+		}
+	}
+}
+
+// TestFetchStylesReportsAFaceItCannotBake. Instancing can still fail once
+// offDefault has passed -- a CFF2 outline is not baked -- and a family that
+// hits it must lose that one face with a reason, not the whole run.
+func TestFetchStylesReportsAFaceItCannotBake(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Write(variableTTF)
+	}))
+	defer ts.Close()
+	oldBase, oldInstance := googleFontsRawBase, instanceBytes
+	googleFontsRawBase = ts.URL
+	instanceBytes = func(*opentype.Font, map[string]float64) ([]byte, error) {
+		return nil, errors.New("CFF2 outlines are not instanced")
+	}
+	defer func() { googleFontsRawBase = oldBase; instanceBytes = oldInstance }()
+
+	s := testSeed("Var Family", "varfam", "Var[wght].ttf", fonts.KindSans)
+	s.MaxTTFBytes = len(variableTTF) + 1
+	s.Styles = []style{
+		{Name: "Bold", File: "Var[wght].ttf", At: map[string]float64{"wght": 700}},
+		{Name: "Italic", File: "Var-Italic[wght].ttf"},
+	}
+	got, skipped := fetchStyles(s)
+	if len(got) != 1 || got[0].style.Name != "Italic" {
+		t.Fatalf("kept %d styles, want only the one needing no bake", len(got))
+	}
+	if len(skipped) != 1 || !strings.Contains(skipped[0], "CFF2") {
+		t.Errorf("skipped = %v, want the bold with the instancing error", skipped)
+	}
+}
+
+// TestWriteSubpackageSaysWhereABakedFaceCameFrom. A generated package whose
+// bold is a baked instance reads exactly like one whose bold was fetched,
+// unless the file says so.
+func TestWriteSubpackageSaysWhereABakedFaceCameFrom(t *testing.T) {
+	root := t.TempDir()
+	s := testSeed("Var Family", "varfam", "Var[wght].ttf", fonts.KindSans)
+	styles := []fetchedStyle{
+		{style: style{Name: "Bold", File: "Var[wght].ttf", At: map[string]float64{"wght": 700}}, ttf: validTTF},
+		{style: style{Name: "Italic", File: "Var-Italic[wght].ttf"}, ttf: validTTF},
+	}
+	if err := writeSubpackage(root, s, validTTF, []byte(validOFL), styles); err != nil {
+		t.Fatal(err)
+	}
+	src, err := os.ReadFile(filepath.Join(root, "varfam", "varfam.go"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"baked at wght 700 out of Var[wght].ttf", "var Bold []byte", "var Italic []byte"} {
+		if !bytes.Contains(src, []byte(want)) {
+			t.Errorf("varfam.go does not contain %q:\n%s", want, src)
+		}
+	}
+	// The italic was fetched, not baked, so it must claim nothing.
+	if i := bytes.Index(src, []byte("// Italic holds")); i >= 0 && bytes.Contains(src[i:], []byte("baked")) {
+		t.Errorf("the fetched italic is described as baked:\n%s", src[i:])
+	}
+	testSrc, err := os.ReadFile(filepath.Join(root, "varfam", "varfam_test.go"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Contains(testSrc, []byte("func TestBakedFacesAreStatic")) {
+		t.Errorf("a package with a baked face got no test that it was baked:\n%s", testSrc)
 	}
 }

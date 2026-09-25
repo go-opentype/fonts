@@ -36,6 +36,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"text/template"
 	"time"
@@ -267,13 +268,67 @@ func fetchStyles(s seed) (out []fetchedStyle, skipped []string) {
 			skipped = append(skipped, fmt.Sprintf("%s: %d bytes exceeds cap", st.Name, len(b)))
 			continue
 		}
-		if _, err := opentype.Parse(b); err != nil {
+		font, err := opentype.Parse(b)
+		if err != nil {
 			skipped = append(skipped, fmt.Sprintf("%s: opentype.Parse: %v", st.Name, err))
 			continue
+		}
+		if len(st.At) > 0 {
+			if why := offDefault(font, st.At); why != "" {
+				skipped = append(skipped, fmt.Sprintf("%s: %s", st.Name, why))
+				continue
+			}
+			b, err = instanceBytes(font, st.At)
+			if err != nil {
+				skipped = append(skipped, fmt.Sprintf("%s: instance at %v: %v", st.Name, st.At, err))
+				continue
+			}
 		}
 		out = append(out, fetchedStyle{style: st, ttf: b})
 	}
 	return out, skipped
+}
+
+// instanceBytes is Font.InstanceBytes by default. It is a var because the one
+// way instancing can still fail after offDefault has passed -- a CFF2 (variable
+// CFF) outline, which go-opentype does not bake -- needs a CFF2 font to
+// reproduce, and no bundled family has one. What matters is that such a family
+// is skipped with a reason rather than crashing the run, and that is what the
+// test that replaces this checks.
+var instanceBytes = func(f *opentype.Font, at map[string]float64) ([]byte, error) {
+	return f.InstanceBytes(at)
+}
+
+// offDefault returns why baking font at at would be pointless, or "" when it
+// would not be.
+//
+// Baking a font at the point it already sits on succeeds and produces a face
+// that parses, embeds and draws -- the regular weight, under the bold's name.
+// Nothing downstream can tell that apart from a bold, which is why the seed's
+// coordinates are checked against the font's own defaults here rather than
+// trusted.
+func offDefault(font *opentype.Font, at map[string]float64) string {
+	axes := map[string]opentype.Axis{}
+	for _, a := range font.Axes() {
+		axes[a.Tag] = a
+	}
+	moved := false
+	for tag, v := range at {
+		a, ok := axes[tag]
+		if !ok {
+			return fmt.Sprintf("no %q axis in this font", tag)
+		}
+		if v < a.Min || v > a.Max {
+			return fmt.Sprintf("%s %v is outside the font's %v..%v", tag, v, a.Min, a.Max)
+		}
+		if v != a.Default {
+			moved = true
+		}
+	}
+	if !moved {
+		return fmt.Sprintf("%v is the font's default position: baking it would bundle the regular weight under another name", at)
+	}
+	return ""
 }
 
 // fetchedStyle is one style's seed beside the bytes that were fetched for it.
@@ -359,10 +414,9 @@ var subpackageTmpl = template.Must(template.New("subpackage").Parse(`// Code gen
 // License: OFL-1.1. {{.Copyright}}
 // Upstream: https://github.com/google/fonts/tree/main/ofl/{{.Slug}}
 {{if .VariableFont}}//
-// {{.Name}} is a variable font upstream; the bundled .ttf is pinned at its
-// default master (static instance). go-opentype has no variable-font
-// support, so it always renders that default instance — OpenType
-// Variations axes are not applied.
+// {{.Name}} is a variable font upstream and the bundled {{.Slug}}.ttf is that
+// variable file. Face returns its default master; Font.Instance bakes any
+// other point on its axes into a static font.
 {{end}}//
 // Importing this package links only {{.Name}} into your binary. No other
 // bundled family is compiled in unless you import its package too.
@@ -375,7 +429,9 @@ import _ "embed" // for the //go:embed directive below
 //go:embed {{.Slug}}.ttf
 var TTF []byte
 {{range .Styles}}
-// {{.Name}} holds the raw TrueType bytes of the {{.Lower}} face.
+// {{.Name}} holds the raw TrueType bytes of the {{.Lower}} face{{if .At}}: a static
+// instance baked at {{.At}} out of {{.Source}}, since upstream ships no file
+// for this weight, only the axis it sits on{{end}}.
 //
 //go:embed {{.File}}
 var {{.Name}} []byte
@@ -428,6 +484,29 @@ func TestEveryFaceParses(t *testing.T) {
 		}
 	}
 }
+{{end}}{{if .Instanced}}
+// TestBakedFacesAreStatic. A face baked out of a variation axis is bundled so
+// that a consumer which cannot handle a variable font -- a PDF writer embedding
+// the bytes, say -- still gets this weight. That only holds if the baking
+// actually happened: a variable font pinned by nothing but its default would
+// parse, embed, and draw the regular weight under the bold's name.
+func TestBakedFacesAreStatic(t *testing.T) {
+	for _, c := range []struct {
+		name string
+		ttf  []byte
+	}{ {{range .Styles}}{{if .At}}
+		{"{{.Name}}", {{.Name}}},{{end}}{{end}}
+	} {
+		f, err := opentype.Parse(c.ttf)
+		if err != nil {
+			t.Errorf("%s: opentype.Parse: %v", c.name, err)
+			continue
+		}
+		if axes := f.Axes(); len(axes) != 0 {
+			t.Errorf("%s: %d variation axes, want none: this face was not baked", c.name, len(axes))
+		}
+	}
+}
 {{end}}{{if .TestRuneChar}}
 // TestRepresentativeGlyph proves TTF maps and rasterises {{.TestRuneChar}} (U+{{.TestRuneHex}}),
 // a rune this family's script exists to cover — stronger evidence than
@@ -460,6 +539,9 @@ type subpackageData struct {
 	Name         string
 	Copyright    string
 	VariableFont bool
+	// Instanced is true when any bundled face was baked out of a variation
+	// axis, which is what TestBakedFacesAreStatic exists to check.
+	Instanced bool
 	// TestRuneChar is the seed's TestRune rendered as a one-rune string
 	// ("" when the seed did not set TestRune), and TestRuneHex is its
 	// upper-case hex codepoint ("4E2D"). Both feed the optional
@@ -482,6 +564,31 @@ type styleData struct {
 	// Lower is Name in words, for the doc comment: "bold", "italic",
 	// "bold italic".
 	Lower string
+	// Source is the upstream filename the face was fetched from, and At the
+	// variation position it was baked at ("wght 700"), empty when the face
+	// was bundled as fetched. Together they let the generated doc comment
+	// say where a face that upstream ships no file for came from.
+	Source string
+	At     string
+}
+
+// axisWords renders a variation position for a doc comment, with the axis tags
+// in a fixed order so regenerating an unchanged family produces an unchanged
+// file.
+func axisWords(at map[string]float64) string {
+	if len(at) == 0 {
+		return ""
+	}
+	tags := make([]string, 0, len(at))
+	for tag := range at {
+		tags = append(tags, tag)
+	}
+	sort.Strings(tags)
+	parts := make([]string, len(tags))
+	for i, tag := range tags {
+		parts[i] = fmt.Sprintf("%s %s", tag, strconv.FormatFloat(at[tag], 'f', -1, 64))
+	}
+	return strings.Join(parts, ", ")
 }
 
 // writeSubpackage writes the .ttf, .go and _test.go files for one family
@@ -520,7 +627,11 @@ func writeSubpackageWithTemplates(root string, s seed, ttf, oflText []byte, styl
 		}
 		data.Styles = append(data.Styles, styleData{
 			Name: st.style.Name, File: file, Lower: inWords(st.style.Name),
+			Source: st.style.File, At: axisWords(st.style.At),
 		})
+		if len(st.style.At) > 0 {
+			data.Instanced = true
+		}
 	}
 
 	if err := renderGoFile(filepath.Join(dir, s.Slug+".go"), tmpl, data); err != nil {
