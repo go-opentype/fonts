@@ -20,6 +20,25 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
+      - name: Refuse a committed executable
+        run: |
+          # A built binary committed by a stray "git add" is invisible in a
+          # diff, weighs more than the library, and is permanent once merged.
+          # Naming one in .gitignore stops working the day the command is
+          # renamed, so this asks what a file IS: the magic number of a
+          # Mach-O, ELF or PE image. A bundled .ttf reads as font/sfnt and is
+          # not caught. The separator is [[:space:]]+ and not a single
+          # space because `file` pads its output into columns as soon as it is
+          # given more than one name, which a pattern developed against one
+          # file does not see.
+          found=$(git ls-files -z | xargs -0 -r file --mime-type -- \
+            | grep -E ':[[:space:]]+application/(x-mach-binary|x-executable|x-sharedlib|x-pie-executable|x-dosexec|vnd\.microsoft\.portable-executable)$' || true)
+          if [ -n "$found" ]; then
+            echo "::error::a built binary is committed:"
+            echo "$found"
+            exit 1
+          fi
+
       - uses: actions/setup-go@v7
         with:
           go-version: "1.27.0"

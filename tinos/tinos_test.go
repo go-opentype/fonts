@@ -23,3 +23,27 @@ func TestParse(t *testing.T) {
 		t.Fatalf("NumGlyphs() = %d, want > 0", f.NumGlyphs())
 	}
 }
+
+// TestEveryFaceParses proves the other faces bundled beside TTF load too. A
+// face that is embedded and broken is worse than one that is absent: nothing
+// reads it until a document asks for that weight, and then it fails where a
+// page is being drawn rather than here.
+func TestEveryFaceParses(t *testing.T) {
+	for _, c := range []struct {
+		name string
+		ttf  []byte
+	}{
+		{"Bold", Bold},
+		{"Italic", Italic},
+		{"BoldItalic", BoldItalic},
+	} {
+		f, err := opentype.Parse(c.ttf)
+		if err != nil {
+			t.Errorf("%s: opentype.Parse: %v", c.name, err)
+			continue
+		}
+		if f.NumGlyphs() <= 0 {
+			t.Errorf("%s: NumGlyphs() = %d, want > 0", c.name, f.NumGlyphs())
+		}
+	}
+}

@@ -6,6 +6,28 @@ package main
 
 import "github.com/go-opentype/fonts"
 
+// A style is one face of a family beside its regular weight.
+type style struct {
+	// Name is the exported Go identifier the face is bundled under: Bold,
+	// Italic, BoldItalic.
+	Name string
+	// File is the filename within the family's "ofl/<slug>/" directory,
+	// exactly as TTFFile is.
+	File string
+	// At, when non-empty, names a point in File's variation space, in user
+	// units ({"wght": 700}). The face is then baked into a static instance
+	// at that point rather than bundled as fetched.
+	//
+	// This is how a family whose bold exists only as a position on an axis
+	// gets one. A font with a wght axis reaching 700 HAS a bold; upstream
+	// simply ships no file holding it. Instancing writes that file.
+	//
+	// What is bundled is a static font, not a variable one pinned by a
+	// default: the instance carries no fvar, so nothing downstream has to
+	// know about axes to get the right outlines and the right advances.
+	At map[string]float64
+}
+
 // seed describes one Google Fonts OFL family to ingest.
 type seed struct {
 	// Name is the display name, e.g. "Roboto".
@@ -30,6 +52,15 @@ type seed struct {
 	// its license is not an option, and neither is bundling the license of a
 	// different family, so the seed says where the real one is.
 	LicenseURL string
+	// Styles are the other faces of the family to bundle beside the regular
+	// one: bold, italic, bold-italic. Each becomes its own .ttf and its own
+	// exported variable in the generated package.
+	//
+	// It is a list rather than three fields because a family ships what it
+	// ships: a static file for some faces, a point on an axis for others
+	// (see style.At), and nothing at all for the rest. A field left empty
+	// cannot say which of those three it is.
+	Styles []style
 	// MaxTTFBytes overrides maxTTFBytes for this seed alone, when non-zero.
 	// Use it for the rare family (e.g. a CJK Noto variant) whose .ttf is
 	// legitimately far larger than the default cap; every other seed
@@ -116,12 +147,36 @@ var seeds = []seed{
 	{Name: "Mulish", Slug: "mulish", TTFFile: "Mulish[wght].ttf", Kind: fonts.KindSans},
 	{Name: "Cabin", Slug: "cabin", TTFFile: "Cabin[wdth,wght].ttf", Kind: fonts.KindSans},
 	{Name: "Titillium Web", Slug: "titilliumweb", TTFFile: "TitilliumWeb-Regular.ttf", Kind: fonts.KindSans},
-	{Name: "Arimo", Slug: "arimo", TTFFile: "Arimo[wght].ttf", Kind: fonts.KindSans},
+	// Arimo ships no static instances upstream: both files are variable
+	// fonts. The italic is bundled at its own default master, which is a
+	// true italic; the BOLD is not reachable this way at all, because it is
+	// the far end of the weight axis of the roman file rather than a file of
+	// its own. It arrives when this module can instance a variable font.
+	// Arimo's google/fonts directory holds two files and both are variable:
+	// there is no static bold to fetch. Its wght axis runs 400-700, so the
+	// bold is there -- as a position, not a file. Bold and BoldItalic are
+	// baked out of the two variable files at wght 700.
+	{Name: "Arimo", Slug: "arimo", TTFFile: "Arimo[wght].ttf", Kind: fonts.KindSans,
+		Styles: []style{
+			{Name: "Bold", File: "Arimo[wght].ttf", At: map[string]float64{"wght": 700}},
+			{Name: "Italic", File: "Arimo-Italic[wght].ttf"},
+			{Name: "BoldItalic", File: "Arimo-Italic[wght].ttf", At: map[string]float64{"wght": 700}},
+		}},
 	// Tinos's google/fonts directory ships no OFL.txt; its METADATA.pb names
 	// the license and the text is in the upstream project.
 	{Name: "Tinos", Slug: "tinos", TTFFile: "Tinos-Regular.ttf", Kind: fonts.KindSerif,
+		Styles: []style{
+			{Name: "Bold", File: "Tinos-Bold.ttf"},
+			{Name: "Italic", File: "Tinos-Italic.ttf"},
+			{Name: "BoldItalic", File: "Tinos-BoldItalic.ttf"},
+		},
 		LicenseURL: "https://raw.githubusercontent.com/googlefonts/tinos/main/OFL.txt"},
-	{Name: "Cousine", Slug: "cousine", TTFFile: "Cousine-Regular.ttf", Kind: fonts.KindMono},
+	{Name: "Cousine", Slug: "cousine", TTFFile: "Cousine-Regular.ttf", Kind: fonts.KindMono,
+		Styles: []style{
+			{Name: "Bold", File: "Cousine-Bold.ttf"},
+			{Name: "Italic", File: "Cousine-Italic.ttf"},
+			{Name: "BoldItalic", File: "Cousine-BoldItalic.ttf"},
+		}},
 
 	// Non-Latin script families: RTL (Arabic, Hebrew), Indic (Devanagari),
 	// Southeast Asian (Thai), Ancient Egyptian (Egyptian Hieroglyphs, a

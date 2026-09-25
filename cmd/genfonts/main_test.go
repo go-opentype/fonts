@@ -7,16 +7,20 @@ package main
 import (
 	"bytes"
 	"errors"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"text/template"
 
 	"github.com/go-opentype/fonts"
+	"github.com/go-opentype/fonts/arimo"
 	"github.com/go-opentype/fonts/atkinsonhyperlegible"
+	"github.com/go-opentype/opentype"
 )
 
 // validTTF is a real, small, already-shipped font used as a stand-in for
@@ -28,11 +32,11 @@ const validOFL = "Copyright 2020 Test Foundry (https://example.com)\n\n" +
 	"This Font Software is licensed under the SIL Open Font License, Version 1.1.\n"
 
 func TestRootFromArgs(t *testing.T) {
-	if got := rootFromArgs([]string{"genfonts"}); got != "." {
-		t.Errorf("rootFromArgs(no extra args) = %q, want %q", got, ".")
+	if got := rootFromArgsOnlyRoot([]string{"genfonts"}); got != "." {
+		t.Errorf("rootFromArgsOnlyRoot(no extra args) = %q, want %q", got, ".")
 	}
-	if got := rootFromArgs([]string{"genfonts", "/tmp/out"}); got != "/tmp/out" {
-		t.Errorf("rootFromArgs(with arg) = %q, want %q", got, "/tmp/out")
+	if got := rootFromArgsOnlyRoot([]string{"genfonts", "/tmp/out"}); got != "/tmp/out" {
+		t.Errorf("rootFromArgsOnlyRoot(with arg) = %q, want %q", got, "/tmp/out")
 	}
 }
 
@@ -183,7 +187,7 @@ func TestRunFailsOnUnhandledKind(t *testing.T) {
 	root := t.TempDir()
 	// "good1" fetches and writes fine; only its Kind is unrepresentable, so the
 	// failure can come from nowhere but kindConst.
-	_, err := run(root, []seed{testSeed("Good1", "good1", "good1-Regular.ttf", fonts.Kind(99))})
+	_, err := run(root, []seed{testSeed("Good1", "good1", "good1-Regular.ttf", fonts.Kind(99))}, true)
 	if err == nil {
 		t.Fatal("run with an unhandled Kind must fail")
 	}
@@ -219,7 +223,7 @@ func TestWriteSubpackage(t *testing.T) {
 	root := t.TempDir()
 	s := testSeed("Test Family", "testfamily", "TestFamily[wght].ttf", fonts.KindSans)
 
-	if err := writeSubpackage(root, s, validTTF, []byte(validOFL)); err != nil {
+	if err := writeSubpackage(root, s, validTTF, []byte(validOFL), nil); err != nil {
 		t.Fatalf("writeSubpackage: %v", err)
 	}
 
@@ -256,7 +260,7 @@ func TestWriteSubpackageTestRune(t *testing.T) {
 	s := testSeed("CJK Family", "cjkfamily", "CJKFamily[wght].ttf", fonts.KindSans)
 	s.TestRune = '中'
 
-	if err := writeSubpackage(root, s, validTTF, []byte(validOFL)); err != nil {
+	if err := writeSubpackage(root, s, validTTF, []byte(validOFL), nil); err != nil {
 		t.Fatalf("writeSubpackage: %v", err)
 	}
 
@@ -281,7 +285,7 @@ func TestWriteSubpackageNoTestRune(t *testing.T) {
 	root := t.TempDir()
 	s := testSeed("Latin Family", "latinfamily", "LatinFamily-Regular.ttf", fonts.KindSans)
 
-	if err := writeSubpackage(root, s, validTTF, []byte(validOFL)); err != nil {
+	if err := writeSubpackage(root, s, validTTF, []byte(validOFL), nil); err != nil {
 		t.Fatalf("writeSubpackage: %v", err)
 	}
 
@@ -298,7 +302,7 @@ func TestWriteSubpackageNonVariableFont(t *testing.T) {
 	root := t.TempDir()
 	s := testSeed("Plain Family", "plainfamily", "PlainFamily-Regular.ttf", fonts.KindMono)
 
-	if err := writeSubpackage(root, s, validTTF, []byte(validOFL)); err != nil {
+	if err := writeSubpackage(root, s, validTTF, []byte(validOFL), nil); err != nil {
 		t.Fatalf("writeSubpackage: %v", err)
 	}
 	goSrc, err := os.ReadFile(filepath.Join(root, "plainfamily", "plainfamily.go"))
@@ -321,7 +325,7 @@ func TestWriteSubpackageMkdirDirError(t *testing.T) {
 	}
 
 	s := testSeed("X", "sub", "X-Regular.ttf", fonts.KindSans)
-	if err := writeSubpackage(blocked, s, validTTF, []byte(validOFL)); err == nil {
+	if err := writeSubpackage(blocked, s, validTTF, []byte(validOFL), nil); err == nil {
 		t.Fatal("writeSubpackage(blocked root): want error, got nil")
 	}
 }
@@ -340,7 +344,7 @@ func TestWriteSubpackageWriteTTFError(t *testing.T) {
 	defer os.Chmod(dir, 0o755)
 
 	s := testSeed("Y", "readonly", "Y-Regular.ttf", fonts.KindSans)
-	if err := writeSubpackage(root, s, validTTF, []byte(validOFL)); err == nil {
+	if err := writeSubpackage(root, s, validTTF, []byte(validOFL), nil); err == nil {
 		t.Fatal("writeSubpackage(read-only dir): want error, got nil")
 	}
 }
@@ -354,7 +358,7 @@ func TestWriteSubpackageTemplateErrors(t *testing.T) {
 
 	t.Run("go file template fails", func(t *testing.T) {
 		root := t.TempDir()
-		err := writeSubpackageWithTemplates(root, s, validTTF, []byte(validOFL), brokenTmpl, subpackageTestTmpl)
+		err := writeSubpackageWithTemplates(root, s, validTTF, []byte(validOFL), nil, brokenTmpl, subpackageTestTmpl)
 		if err == nil {
 			t.Fatal("want error, got nil")
 		}
@@ -362,7 +366,7 @@ func TestWriteSubpackageTemplateErrors(t *testing.T) {
 
 	t.Run("test file template fails", func(t *testing.T) {
 		root := t.TempDir()
-		err := writeSubpackageWithTemplates(root, s, validTTF, []byte(validOFL), subpackageTmpl, brokenTmpl)
+		err := writeSubpackageWithTemplates(root, s, validTTF, []byte(validOFL), nil, subpackageTmpl, brokenTmpl)
 		if err == nil {
 			t.Fatal("want error, got nil")
 		}
@@ -378,7 +382,7 @@ func TestWriteSubpackageLicensesDirIsFile(t *testing.T) {
 	}
 
 	s := testSeed("W", "wfam", "W-Regular.ttf", fonts.KindSans)
-	if err := writeSubpackage(root, s, validTTF, []byte(validOFL)); err == nil {
+	if err := writeSubpackage(root, s, validTTF, []byte(validOFL), nil); err == nil {
 		t.Fatal("writeSubpackage(licenses/ is a file): want error, got nil")
 	}
 }
@@ -397,7 +401,7 @@ func TestWriteSubpackageLicenseWriteError(t *testing.T) {
 	defer os.Chmod(licensesDir, 0o755)
 
 	s := testSeed("V", "vfam", "V-Regular.ttf", fonts.KindSans)
-	if err := writeSubpackage(root, s, validTTF, []byte(validOFL)); err == nil {
+	if err := writeSubpackage(root, s, validTTF, []byte(validOFL), nil); err == nil {
 		t.Fatal("writeSubpackage(read-only licenses dir): want error, got nil")
 	}
 }
@@ -500,7 +504,7 @@ func TestRunAllBranches(t *testing.T) {
 		testSeed("Blocked Slug", "blockedslug", "blockedslug-Regular.ttf", fonts.KindSans),
 	}
 
-	results, err := run(root, seedList)
+	results, err := run(root, seedList, true)
 	if err != nil {
 		t.Fatalf("run: %v", err)
 	}
@@ -563,7 +567,7 @@ func TestRunTTFNetworkError(t *testing.T) {
 	root := t.TempDir()
 	seedList := []seed{testSeed("Dead", "dead", "Dead-Regular.ttf", fonts.KindSans)}
 
-	results, err := run(root, seedList)
+	results, err := run(root, seedList, true)
 	if err != nil {
 		t.Fatalf("run: %v", err)
 	}
@@ -604,7 +608,7 @@ func TestRunOFLNetworkError(t *testing.T) {
 	root := t.TempDir()
 	seedList := []seed{testSeed("Hijack Ofl", "hijackofl", "hijackofl-Regular.ttf", fonts.KindSans)}
 
-	results, err := run(root, seedList)
+	results, err := run(root, seedList, true)
 	if err != nil {
 		t.Fatalf("run: %v", err)
 	}
@@ -626,8 +630,8 @@ func TestRunWriteGeneratedError(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if _, err := run(blocked, nil); err == nil {
-		t.Fatal("run(unwritable root, no seeds): want error, got nil")
+	if _, err := run(blocked, nil, true); err == nil {
+		t.Fatal("run(unwritable root, no seeds, true): want error, got nil")
 	}
 }
 
@@ -677,5 +681,476 @@ func TestMainError(t *testing.T) {
 
 	if !exitCalled || exitCode != 1 {
 		t.Errorf("exitCalled = %v, exitCode = %d, want true, 1", exitCalled, exitCode)
+	}
+}
+
+// rootFromArgsOnlyRoot is rootFromArgs for the tests that predate -only and
+// care about the root alone.
+func rootFromArgsOnlyRoot(args []string) string {
+	root, _ := rootFromArgs(args)
+	return root
+}
+
+// TestRootFromArgsReadsOnly. The root is a positional argument and -only is a
+// flag, so a run that names both has to tell them apart whichever order they
+// come in.
+func TestRootFromArgsReadsOnly(t *testing.T) {
+	for _, c := range []struct {
+		args     []string
+		wantRoot string
+		wantOnly []string
+	}{
+		{[]string{"genfonts"}, ".", nil},
+		{[]string{"genfonts", "/out"}, "/out", nil},
+		{[]string{"genfonts", "-only=arimo"}, ".", []string{"arimo"}},
+		{[]string{"genfonts", "-only", "arimo,tinos", "/out"}, "/out", []string{"arimo", "tinos"}},
+		{[]string{"genfonts", "/out", "-only=a,b", "-only=c"}, "/out", []string{"a", "b", "c"}},
+		// A flag this command does not know is not a root.
+		{[]string{"genfonts", "-v", "/out"}, "/out", nil},
+		// -only with nothing after it names nothing rather than eating the root.
+		{[]string{"genfonts", "/out", "-only"}, "/out", nil},
+	} {
+		root, only := rootFromArgs(c.args)
+		if root != c.wantRoot {
+			t.Errorf("%v: root = %q, want %q", c.args, root, c.wantRoot)
+		}
+		if !slices.Equal(only, c.wantOnly) {
+			t.Errorf("%v: only = %v, want %v", c.args, only, c.wantOnly)
+		}
+	}
+}
+
+// TestSelectSeedsRefusesANameItDoesNotKnow. A typo that regenerated nothing
+// would look exactly like a run that worked, which is the whole reason this
+// returns an error rather than an empty list.
+func TestSelectSeedsRefusesANameItDoesNotKnow(t *testing.T) {
+	all := []seed{
+		testSeed("A", "a", "A-Regular.ttf", fonts.KindSans),
+		testSeed("B", "b", "B-Regular.ttf", fonts.KindSerif),
+	}
+	got, err := selectSeeds(all, nil)
+	if err != nil || len(got) != 2 {
+		t.Errorf("no -only: %d seeds, err %v; want all of them", len(got), err)
+	}
+	got, err = selectSeeds(all, []string{"b"})
+	if err != nil || len(got) != 1 || got[0].Slug != "b" {
+		t.Errorf("-only b: %v, err %v; want just b", got, err)
+	}
+	// Whitespace around a name is the shell's, not the user's mistake.
+	if got, err := selectSeeds(all, []string{" a "}); err != nil || len(got) != 1 {
+		t.Errorf("-only ' a ': %v, err %v; want just a", got, err)
+	}
+	if _, err := selectSeeds(all, []string{"a", "nosuch", "alsonot"}); err == nil {
+		t.Error("-only naming two absent seeds: want an error, got nil")
+	} else if !strings.Contains(err.Error(), "alsonot") || !strings.Contains(err.Error(), "nosuch") {
+		t.Errorf("err = %v, want both missing names in it", err)
+	}
+}
+
+func TestInWords(t *testing.T) {
+	for in, want := range map[string]string{
+		"Bold": "bold", "Italic": "italic", "BoldItalic": "bold italic", "Black": "black",
+	} {
+		if got := inWords(in); got != want {
+			t.Errorf("inWords(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
+// TestFetchStylesDropsWhatItCannotGet. A family whose bold is gone is still
+// worth bundling; a package that names a face whose bytes are missing does not
+// compile. So every failure is a dropped style with a reason, never a dropped
+// family and never a silent one.
+func TestFetchStylesDropsWhatItCannotGet(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case strings.HasSuffix(r.URL.Path, "Good-Bold.ttf"):
+			w.Write(validTTF)
+		case strings.HasSuffix(r.URL.Path, "Good-Huge.ttf"):
+			w.Write(make([]byte, maxTTFBytes+1))
+		case strings.HasSuffix(r.URL.Path, "Good-Junk.ttf"):
+			w.Write([]byte("not a font"))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer ts.Close()
+	oldBase := googleFontsRawBase
+	googleFontsRawBase = ts.URL
+	defer func() { googleFontsRawBase = oldBase }()
+
+	s := testSeed("Good", "good", "Good-Regular.ttf", fonts.KindSans)
+	s.Styles = []style{
+		{Name: "Bold", File: "Good-Bold.ttf"},
+		{Name: "Italic", File: "Good-Missing.ttf"},
+		{Name: "BoldItalic", File: "Good-Huge.ttf"},
+		{Name: "Black", File: "Good-Junk.ttf"},
+	}
+	got, skipped := fetchStyles(s)
+	if len(got) != 1 || got[0].style.Name != "Bold" {
+		t.Fatalf("kept %d styles, want only Bold", len(got))
+	}
+	if len(skipped) != 3 {
+		t.Fatalf("skipped %d, want 3: %v", len(skipped), skipped)
+	}
+	for _, want := range []string{"HTTP 404", "exceeds cap", "opentype.Parse"} {
+		if !slices.ContainsFunc(skipped, func(s string) bool { return strings.Contains(s, want) }) {
+			t.Errorf("no skipped style says %q: %v", want, skipped)
+		}
+	}
+}
+
+// TestFetchStylesSaysWhenItCannotReachTheServerAtAll covers the transport
+// error, which is a different answer from a 404: the file may well be there.
+func TestFetchStylesSaysWhenItCannotReachTheServerAtAll(t *testing.T) {
+	oldBase := googleFontsRawBase
+	googleFontsRawBase = "http://127.0.0.1:1" // nothing listens on port 1
+	defer func() { googleFontsRawBase = oldBase }()
+
+	s := testSeed("Good", "good", "Good-Regular.ttf", fonts.KindSans)
+	s.Styles = []style{{Name: "Bold", File: "Good-Bold.ttf"}}
+	got, skipped := fetchStyles(s)
+	if len(got) != 0 || len(skipped) != 1 {
+		t.Fatalf("kept %d, skipped %d; want none kept and one reason", len(got), len(skipped))
+	}
+	if !strings.Contains(skipped[0], "fetch") {
+		t.Errorf("reason = %q, want it to name the fetch", skipped[0])
+	}
+}
+
+// TestAPartialRunLeavesTheRegistryAlone. generated.go is written from the
+// seeds that SUCCEEDED, so a run of one family would otherwise drop every
+// other family from the registry.
+func TestAPartialRunLeavesTheRegistryAlone(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, ".ttf") {
+			w.Write(validTTF)
+			return
+		}
+		w.Write([]byte(validOFL))
+	}))
+	defer ts.Close()
+	oldBase := googleFontsRawBase
+	googleFontsRawBase = ts.URL
+	defer func() { googleFontsRawBase = oldBase }()
+
+	root := t.TempDir()
+	const sentinel = "// written by nobody\n"
+	if err := os.WriteFile(filepath.Join(root, "generated.go"), []byte(sentinel), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	list := []seed{testSeed("One", "one", "One-Regular.ttf", fonts.KindSans)}
+	if _, err := run(root, list, false); err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	b, err := os.ReadFile(filepath.Join(root, "generated.go"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(b) != sentinel {
+		t.Error("a partial run rewrote generated.go, which would drop every family it did not visit")
+	}
+	// And it did write the subpackage it was asked for.
+	if _, err := os.Stat(filepath.Join(root, "one", "one.ttf")); err != nil {
+		t.Errorf("the family named was not written: %v", err)
+	}
+}
+
+// TestMainRefusesAnUnknownOnlyName. A -only that names nothing must not reach
+// run(): that run would regenerate no family and exit 0, which reads exactly
+// like a run that worked.
+func TestMainRefusesAnUnknownOnlyName(t *testing.T) {
+	origArgs, origSeeds, origExit := os.Args, seeds, osExit
+	defer func() { os.Args = origArgs; seeds = origSeeds; osExit = origExit }()
+
+	root := t.TempDir()
+	os.Args = []string{"genfonts", root, "-only=nosuchfamily"}
+	seeds = []seed{testSeed("One", "one", "One-Regular.ttf", fonts.KindSans)}
+
+	var code int
+	exits := 0
+	osExit = func(c int) { exits++; code = c }
+
+	main()
+
+	if exits != 1 || code != 1 {
+		t.Errorf("osExit called %d times with %d, want once with 1", exits, code)
+	}
+	if _, err := os.Stat(filepath.Join(root, "generated.go")); err == nil {
+		t.Error("a refused run still rewrote generated.go")
+	}
+}
+
+// TestRunBundlesTheStylesItGotAndSaysWhatItDropped. A family whose bold is
+// gone upstream is still worth bundling, so the run succeeds — but a dropped
+// face changes what the package offers, so it cannot be dropped in silence.
+func TestRunBundlesTheStylesItGotAndSaysWhatItDropped(t *testing.T) {
+	mux := http.NewServeMux()
+	for _, f := range []string{"styled-Regular.ttf", "styled-Italic.ttf"} {
+		mux.HandleFunc("/styled/"+f, func(w http.ResponseWriter, r *http.Request) { w.Write(validTTF) })
+	}
+	mux.HandleFunc("/styled/OFL.txt", func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte(validOFL))
+	})
+	// styled-Bold.ttf has no route: upstream no longer has it.
+	ts := httptest.NewServer(mux)
+	defer ts.Close()
+	oldBase := googleFontsRawBase
+	googleFontsRawBase = ts.URL
+	defer func() { googleFontsRawBase = oldBase }()
+
+	oldErr := os.Stderr
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	os.Stderr = w
+	done := make(chan []byte, 1)
+	go func() { b, _ := io.ReadAll(r); done <- b }()
+
+	root := t.TempDir()
+	s := testSeed("Styled", "styled", "styled-Regular.ttf", fonts.KindSans)
+	s.Styles = []style{
+		{Name: "Bold", File: "styled-Bold.ttf"},
+		{Name: "Italic", File: "styled-Italic.ttf"},
+	}
+	results, runErr := run(root, []seed{s}, true)
+
+	w.Close()
+	os.Stderr = oldErr
+	stderr := string(<-done)
+
+	if runErr != nil {
+		t.Fatalf("run: %v", runErr)
+	}
+	if len(results) != 1 || !results[0].ok {
+		t.Fatalf("results = %+v, want one success", results)
+	}
+	if !strings.Contains(stderr, "Styled: Bold:") || !strings.Contains(stderr, "HTTP 404") {
+		t.Errorf("stderr does not name the dropped face and why:\n%s", stderr)
+	}
+	if strings.Contains(stderr, "Italic") {
+		t.Errorf("stderr complains about the face it got:\n%s", stderr)
+	}
+
+	if _, err := os.Stat(filepath.Join(root, "styled", "styled-italic.ttf")); err != nil {
+		t.Errorf("the italic that was fetched was not written: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(root, "styled", "styled-bold.ttf")); err == nil {
+		t.Error("a face that was never fetched was written anyway")
+	}
+	src, err := os.ReadFile(filepath.Join(root, "styled", "styled.go"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"var Italic []byte", `styled-italic.ttf`, "italic"} {
+		if !bytes.Contains(src, []byte(want)) {
+			t.Errorf("styled.go does not contain %q:\n%s", want, src)
+		}
+	}
+	if bytes.Contains(src, []byte("var Bold []byte")) {
+		t.Error("styled.go declares a face whose bytes are not there; the package would not build")
+	}
+}
+
+// TestWriteSubpackageStyleWriteError. The style files are written after the
+// regular one, so a failure there leaves a half-written package: it has to be
+// reported rather than swallowed.
+func TestWriteSubpackageStyleWriteError(t *testing.T) {
+	root := t.TempDir()
+	s := testSeed("Styled", "styled", "styled-Regular.ttf", fonts.KindSans)
+	// Take the name the bold face will want, with a directory.
+	if err := os.MkdirAll(filepath.Join(root, "styled", "styled-bold.ttf"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	styles := []fetchedStyle{{style: style{Name: "Bold", File: "styled-Bold.ttf"}, ttf: validTTF}}
+	if err := writeSubpackage(root, s, validTTF, []byte(validOFL), styles); err == nil {
+		t.Fatal("writeSubpackage(style path is a directory): want error, got nil")
+	}
+}
+
+// variableTTF is a real variable font with one wght axis running 400..700,
+// for the tests about baking a face out of an axis. A synthetic fixture would
+// not do: the point of instancing is that it reads gvar and HVAR.
+var variableTTF = arimo.TTF
+
+func TestOffDefault(t *testing.T) {
+	vf, err := opentype.Parse(variableTTF)
+	if err != nil {
+		t.Fatal(err)
+	}
+	static, err := opentype.Parse(validTTF)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range []struct {
+		name string
+		font *opentype.Font
+		at   map[string]float64
+		want string // "" means: go ahead and bake
+	}{
+		{"a real weight", vf, map[string]float64{"wght": 700}, ""},
+		{"the default weight", vf, map[string]float64{"wght": 400}, "default position"},
+		{"past the axis", vf, map[string]float64{"wght": 900}, "outside the font's"},
+		{"below the axis", vf, map[string]float64{"wght": 100}, "outside the font's"},
+		{"an axis it has not got", vf, map[string]float64{"wdth": 75}, `no "wdth" axis`},
+		{"a font with no axes at all", static, map[string]float64{"wght": 700}, `no "wght" axis`},
+	} {
+		got := offDefault(c.font, c.at)
+		switch {
+		case c.want == "" && got != "":
+			t.Errorf("%s: refused with %q, want it baked", c.name, got)
+		case c.want != "" && !strings.Contains(got, c.want):
+			t.Errorf("%s: %q, want it to mention %q", c.name, got, c.want)
+		}
+	}
+}
+
+// TestFetchStylesBakesAFaceOutOfAnAxis. Arimo's bold is a position on its wght
+// axis and upstream ships no file holding it, so the only way to bundle a bold
+// is to write that file.
+func TestFetchStylesBakesAFaceOutOfAnAxis(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Write(variableTTF)
+	}))
+	defer ts.Close()
+	oldBase := googleFontsRawBase
+	googleFontsRawBase = ts.URL
+	defer func() { googleFontsRawBase = oldBase }()
+
+	s := testSeed("Var Family", "varfam", "Var[wght].ttf", fonts.KindSans)
+	s.MaxTTFBytes = len(variableTTF) + 1
+	s.Styles = []style{
+		{Name: "Bold", File: "Var[wght].ttf", At: map[string]float64{"wght": 700}},
+		{Name: "Italic", File: "Var-Italic[wght].ttf"},
+		// A bake at the position the font already sits on is a no-op that
+		// would bundle the regular weight under this name.
+		{Name: "Black", File: "Var[wght].ttf", At: map[string]float64{"wght": 400}},
+	}
+	got, skipped := fetchStyles(s)
+	if len(got) != 2 {
+		t.Fatalf("kept %d styles, want Bold and Italic: %v", len(got), skipped)
+	}
+	if len(skipped) != 1 || !strings.Contains(skipped[0], "default position") {
+		t.Errorf("skipped = %v, want just the no-op bake", skipped)
+	}
+
+	bold, italic := got[0], got[1]
+	if bold.style.Name != "Bold" || italic.style.Name != "Italic" {
+		t.Fatalf("kept %q and %q, want Bold and Italic", bold.style.Name, italic.style.Name)
+	}
+	// The italic was not asked to be baked, so it is the bytes as fetched.
+	if !bytes.Equal(italic.ttf, variableTTF) {
+		t.Error("a face with no At was rewritten anyway")
+	}
+	// The bold was, so it is a static font -- and a different weight, which
+	// is the part a font that merely parses does not prove.
+	bf, err := opentype.Parse(bold.ttf)
+	if err != nil {
+		t.Fatalf("the baked face does not parse: %v", err)
+	}
+	if axes := bf.Axes(); len(axes) != 0 {
+		t.Errorf("the baked face still has %d axes, so nothing was baked", len(axes))
+	}
+	vf, err := opentype.Parse(variableTTF)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// 'm' is 833/1000 em in Helvetica and 889 in Helvetica-Bold, and Arimo is
+	// metric-compatible with both: the advance is how you tell the weights
+	// apart, and it is what HVAR carries.
+	adv := func(f *opentype.Font) float64 {
+		gid, ok := f.GlyphIndex('m')
+		if !ok {
+			t.Fatal("'m' is not mapped")
+		}
+		return float64(f.GlyphAdvance(gid)) * 1000 / float64(f.UnitsPerEm())
+	}
+	if regular, baked := adv(vf), adv(bf); baked <= regular+1 {
+		t.Errorf("'m' advance: default master %.1f, baked face %.1f -- the baked face is not a heavier weight", regular, baked)
+	}
+}
+
+func TestAxisWords(t *testing.T) {
+	for _, c := range []struct {
+		at   map[string]float64
+		want string
+	}{
+		{nil, ""},
+		{map[string]float64{}, ""},
+		{map[string]float64{"wght": 700}, "wght 700"},
+		{map[string]float64{"wght": 87.5}, "wght 87.5"},
+		// Sorted by tag, so regenerating an unchanged family produces an
+		// unchanged file whatever order the map ranges in.
+		{map[string]float64{"wght": 700, "wdth": 75, "opsz": 14}, "opsz 14, wdth 75, wght 700"},
+	} {
+		if got := axisWords(c.at); got != c.want {
+			t.Errorf("axisWords(%v) = %q, want %q", c.at, got, c.want)
+		}
+	}
+}
+
+// TestFetchStylesReportsAFaceItCannotBake. Instancing can still fail once
+// offDefault has passed -- a CFF2 outline is not baked -- and a family that
+// hits it must lose that one face with a reason, not the whole run.
+func TestFetchStylesReportsAFaceItCannotBake(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Write(variableTTF)
+	}))
+	defer ts.Close()
+	oldBase, oldInstance := googleFontsRawBase, instanceBytes
+	googleFontsRawBase = ts.URL
+	instanceBytes = func(*opentype.Font, map[string]float64) ([]byte, error) {
+		return nil, errors.New("CFF2 outlines are not instanced")
+	}
+	defer func() { googleFontsRawBase = oldBase; instanceBytes = oldInstance }()
+
+	s := testSeed("Var Family", "varfam", "Var[wght].ttf", fonts.KindSans)
+	s.MaxTTFBytes = len(variableTTF) + 1
+	s.Styles = []style{
+		{Name: "Bold", File: "Var[wght].ttf", At: map[string]float64{"wght": 700}},
+		{Name: "Italic", File: "Var-Italic[wght].ttf"},
+	}
+	got, skipped := fetchStyles(s)
+	if len(got) != 1 || got[0].style.Name != "Italic" {
+		t.Fatalf("kept %d styles, want only the one needing no bake", len(got))
+	}
+	if len(skipped) != 1 || !strings.Contains(skipped[0], "CFF2") {
+		t.Errorf("skipped = %v, want the bold with the instancing error", skipped)
+	}
+}
+
+// TestWriteSubpackageSaysWhereABakedFaceCameFrom. A generated package whose
+// bold is a baked instance reads exactly like one whose bold was fetched,
+// unless the file says so.
+func TestWriteSubpackageSaysWhereABakedFaceCameFrom(t *testing.T) {
+	root := t.TempDir()
+	s := testSeed("Var Family", "varfam", "Var[wght].ttf", fonts.KindSans)
+	styles := []fetchedStyle{
+		{style: style{Name: "Bold", File: "Var[wght].ttf", At: map[string]float64{"wght": 700}}, ttf: validTTF},
+		{style: style{Name: "Italic", File: "Var-Italic[wght].ttf"}, ttf: validTTF},
+	}
+	if err := writeSubpackage(root, s, validTTF, []byte(validOFL), styles); err != nil {
+		t.Fatal(err)
+	}
+	src, err := os.ReadFile(filepath.Join(root, "varfam", "varfam.go"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"baked at wght 700 out of Var[wght].ttf", "var Bold []byte", "var Italic []byte"} {
+		if !bytes.Contains(src, []byte(want)) {
+			t.Errorf("varfam.go does not contain %q:\n%s", want, src)
+		}
+	}
+	// The italic was fetched, not baked, so it must claim nothing.
+	if i := bytes.Index(src, []byte("// Italic holds")); i >= 0 && bytes.Contains(src[i:], []byte("baked")) {
+		t.Errorf("the fetched italic is described as baked:\n%s", src[i:])
+	}
+	testSrc, err := os.ReadFile(filepath.Join(root, "varfam", "varfam_test.go"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Contains(testSrc, []byte("func TestBakedFacesAreStatic")) {
+		t.Errorf("a package with a baked face got no test that it was baked:\n%s", testSrc)
 	}
 }

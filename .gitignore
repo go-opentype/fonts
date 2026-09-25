@@ -1,2 +1,17 @@
 coverage.out
 *.out
+
+# A built command binary lands in the repository root, named after the
+# directory it was built from: "go build ./cmd/genfonts" writes ./genfonts.
+# A rule that NAMES that binary stops working the day the command is renamed,
+# and the next build is committed by the next "git add". So the root is closed
+# by default and what belongs in it is named instead.
+/*
+!/*/
+!/*.go
+!/*.md
+!/.gitignore
+!/LICENSE
+!/go.mod
+!/go.sum
+!/renovate.json
