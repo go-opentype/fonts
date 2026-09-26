@@ -330,22 +330,25 @@ func TestWriteSubpackageMkdirDirError(t *testing.T) {
 	}
 }
 
-// TestWriteSubpackageWriteTTFError blocks the .ttf os.WriteFile call by
-// making the (already-created) subpackage directory read-only.
+// TestWriteSubpackageWriteTTFError blocks the .ttf os.WriteFile call by putting
+// a DIRECTORY where the .ttf has to go, which is the same obstacle on every
+// operating system.
+//
+// It used to chmod the subpackage directory to 0555 and that does not block
+// anything on Windows: a read-only directory there still accepts new files,
+// because the read-only attribute on a directory means something else. The test
+// passed for years and reported nothing; it only failed once the suite was run
+// on Windows. The idiom below is the one this file already uses elsewhere.
 func TestWriteSubpackageWriteTTFError(t *testing.T) {
 	root := t.TempDir()
 	dir := filepath.Join(root, "readonly")
-	if err := os.MkdirAll(dir, 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Join(dir, "readonly.ttf"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.Chmod(dir, 0o555); err != nil {
-		t.Fatal(err)
-	}
-	defer os.Chmod(dir, 0o755)
 
 	s := testSeed("Y", "readonly", "Y-Regular.ttf", fonts.KindSans)
 	if err := writeSubpackage(root, s, validTTF, []byte(validOFL), nil); err == nil {
-		t.Fatal("writeSubpackage(read-only dir): want error, got nil")
+		t.Fatal("writeSubpackage(a directory where the .ttf goes): want error, got nil")
 	}
 }
 
@@ -387,22 +390,21 @@ func TestWriteSubpackageLicensesDirIsFile(t *testing.T) {
 	}
 }
 
-// TestWriteSubpackageLicenseWriteError blocks the license os.WriteFile call
-// by making an already-existing licenses/ directory read-only.
+// TestWriteSubpackageLicenseWriteError blocks the license os.WriteFile call by
+// putting a DIRECTORY at the license's own path, leaving licenses/ itself a
+// perfectly good directory. Chmodding licenses/ to 0555 blocked nothing on
+// Windows -- see TestWriteSubpackageWriteTTFError.
 func TestWriteSubpackageLicenseWriteError(t *testing.T) {
 	root := t.TempDir()
-	licensesDir := filepath.Join(root, "licenses")
-	if err := os.MkdirAll(licensesDir, 0o755); err != nil {
+	// writeSubpackage names the license after the family with its spaces
+	// removed, so seed "V" gives licenses/V-OFL.txt.
+	if err := os.MkdirAll(filepath.Join(root, "licenses", "V-OFL.txt"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.Chmod(licensesDir, 0o555); err != nil {
-		t.Fatal(err)
-	}
-	defer os.Chmod(licensesDir, 0o755)
 
 	s := testSeed("V", "vfam", "V-Regular.ttf", fonts.KindSans)
 	if err := writeSubpackage(root, s, validTTF, []byte(validOFL), nil); err == nil {
-		t.Fatal("writeSubpackage(read-only licenses dir): want error, got nil")
+		t.Fatal("writeSubpackage(a directory where the license goes): want error, got nil")
 	}
 }
 
