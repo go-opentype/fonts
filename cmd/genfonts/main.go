@@ -274,7 +274,7 @@ func fetchStyles(s seed) (out []fetchedStyle, skipped []string) {
 			continue
 		}
 		if len(st.At) > 0 {
-			if why := offDefault(font, st.At); why != "" {
+			if why := offDefault(font, st.At, st.File == s.TTFFile); why != "" {
 				skipped = append(skipped, fmt.Sprintf("%s: %s", st.Name, why))
 				continue
 			}
@@ -307,7 +307,12 @@ var instanceBytes = func(f *opentype.Font, at map[string]float64) ([]byte, error
 // Nothing downstream can tell that apart from a bold, which is why the seed's
 // coordinates are checked against the font's own defaults here rather than
 // trusted.
-func offDefault(font *opentype.Font, at map[string]float64) string {
+//
+// The default-position check only applies when font is the very file the
+// regular face comes from (sameAsRegular). A different file at its default is
+// not a no-op: an italic variable font's default master IS the italic, and
+// baking it is how that face becomes a static font with no fvar.
+func offDefault(font *opentype.Font, at map[string]float64, sameAsRegular bool) string {
 	axes := map[string]opentype.Axis{}
 	for _, a := range font.Axes() {
 		axes[a.Tag] = a
@@ -325,7 +330,7 @@ func offDefault(font *opentype.Font, at map[string]float64) string {
 			moved = true
 		}
 	}
-	if !moved {
+	if !moved && sameAsRegular {
 		return fmt.Sprintf("%v is the font's default position: baking it would bundle the regular weight under another name", at)
 	}
 	return ""

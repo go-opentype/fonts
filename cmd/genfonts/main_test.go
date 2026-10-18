@@ -998,7 +998,7 @@ func TestOffDefault(t *testing.T) {
 		{"an axis it has not got", vf, map[string]float64{"wdth": 75}, `no "wdth" axis`},
 		{"a font with no axes at all", static, map[string]float64{"wght": 700}, `no "wght" axis`},
 	} {
-		got := offDefault(c.font, c.at)
+		got := offDefault(c.font, c.at, true)
 		switch {
 		case c.want == "" && got != "":
 			t.Errorf("%s: refused with %q, want it baked", c.name, got)
@@ -1028,10 +1028,20 @@ func TestFetchStylesBakesAFaceOutOfAnAxis(t *testing.T) {
 		// A bake at the position the font already sits on is a no-op that
 		// would bundle the regular weight under this name.
 		{Name: "Black", File: "Var[wght].ttf", At: map[string]float64{"wght": 400}},
+		// A DIFFERENT file at its default is not a no-op: an italic font's
+		// default master is the italic, and baking it makes it static.
+		{Name: "StaticItalic", File: "Var-Italic[wght].ttf", At: map[string]float64{"wght": 400}},
 	}
 	got, skipped := fetchStyles(s)
-	if len(got) != 2 {
-		t.Fatalf("kept %d styles, want Bold and Italic: %v", len(got), skipped)
+	if len(got) != 3 {
+		t.Fatalf("kept %d styles, want Bold, Italic and StaticItalic: %v", len(got), skipped)
+	}
+	sf, err := opentype.Parse(got[2].ttf)
+	if err != nil {
+		t.Fatalf("StaticItalic does not parse: %v", err)
+	}
+	if len(sf.Axes()) != 0 {
+		t.Errorf("StaticItalic still has %d axes, want it baked static", len(sf.Axes()))
 	}
 	if len(skipped) != 1 || !strings.Contains(skipped[0], "default position") {
 		t.Errorf("skipped = %v, want just the no-op bake", skipped)

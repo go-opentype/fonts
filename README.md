@@ -94,14 +94,16 @@ weight, rather than synthesising one.
 
 The families ingested by `cmd/genfonts` name their extra faces in the seed's
 `Styles`, and each is its own exported variable beside `TTF`: **Tinos** and
-**Cousine** have `Bold`, `Italic`, `BoldItalic`; **Arimo** the same, **Lato**
-has `lato.Bold` (700) and `lato.Black` (900), and **Roboto Mono** has
-`robotomono.Bold` (700). Lato's are upstream's static files; Roboto Mono's (like
-Arimo's) is baked out of the variable font's `wght` axis at 700, so it is a
-static font with no `fvar`, but it carries the variable file's OS/2 and `name`
-tables unchanged and still reports weight class 400. A variable that you do not
-reference is dropped by the linker, so importing `lato` for `lato.TTF` alone
-does not link `Bold` or `Black` into your binary.
+**Cousine** have `Bold`, `Italic`, `BoldItalic`; **Arimo** the same; **Lato**
+has `lato.Bold` (700), `lato.Black` (900), `lato.Italic` (400),
+`lato.BoldItalic` (700) and `lato.BlackItalic` (900); **Roboto Mono** has
+`robotomono.Bold` (700), `robotomono.Italic` (400) and `robotomono.BoldItalic`
+(700). Lato's are upstream's static files. Roboto Mono's (like Arimo's bold) are
+baked out of the variable fonts at the stated `wght`, so each is a static font
+with no `fvar`; the instancer restamps OS/2 `usWeightClass`, `fsSelection` and
+head `macStyle` to match (name strings still describe the variable file). A
+variable that you do not reference is dropped by the linker, so importing `lato`
+for `lato.TTF` alone does not link the other faces into your binary.
 
 **Noto Emoji** is the one family whose `Kind` is `emoji` rather than a
 letterform style, and it is the *monochrome* Noto family, not the colour one:

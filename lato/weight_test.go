@@ -10,18 +10,22 @@ import (
 	"github.com/go-opentype/opentype"
 )
 
-// TestWeightClasses proves each bundled face is the weight its variable claims:
-// Bold must not be the Regular and Black must not be the Bold, which a mixed-up
-// embed directive would produce without any parse error.
-func TestWeightClasses(t *testing.T) {
+// TestWeightClassAndSlope proves each bundled face is the weight and slope its
+// variable claims: Bold must not be the Regular and Black must not be the Bold,
+// which a mixed-up embed directive would produce without any parse error.
+func TestWeightClassAndSlope(t *testing.T) {
 	for _, c := range []struct {
-		name string
-		ttf  []byte
-		want int
+		name   string
+		ttf    []byte
+		want   int
+		italic bool
 	}{
-		{"TTF", TTF, 400},
-		{"Bold", Bold, 700},
-		{"Black", Black, 900},
+		{"TTF", TTF, 400, false},
+		{"Bold", Bold, 700, false},
+		{"Black", Black, 900, false},
+		{"Italic", Italic, 400, true},
+		{"BoldItalic", BoldItalic, 700, true},
+		{"BlackItalic", BlackItalic, 900, true},
 	} {
 		f, err := opentype.Parse(c.ttf)
 		if err != nil {
@@ -29,6 +33,9 @@ func TestWeightClasses(t *testing.T) {
 		}
 		if got := f.WeightClass(); got != c.want {
 			t.Errorf("%s: OS/2 usWeightClass = %d, want %d", c.name, got, c.want)
+		}
+		if got := f.IsItalic(); got != c.italic {
+			t.Errorf("%s: IsItalic = %v, want %v", c.name, got, c.italic)
 		}
 	}
 }
