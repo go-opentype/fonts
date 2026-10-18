@@ -120,7 +120,13 @@ type seed struct {
 var seeds = []seed{
 	{Name: "Roboto", Slug: "roboto", TTFFile: "Roboto[wdth,wght].ttf", Kind: fonts.KindSans},
 	{Name: "Open Sans", Slug: "opensans", TTFFile: "OpenSans[wdth,wght].ttf", Kind: fonts.KindSans},
-	{Name: "Lato", Slug: "lato", TTFFile: "Lato-Regular.ttf", Kind: fonts.KindSans},
+	// Lato ships a static file per weight upstream. Bold (700) and Black (900)
+	// are bundled for presentation themes whose headings are Lato Black.
+	{Name: "Lato", Slug: "lato", TTFFile: "Lato-Regular.ttf", Kind: fonts.KindSans,
+		Styles: []style{
+			{Name: "Bold", File: "Lato-Bold.ttf"},
+			{Name: "Black", File: "Lato-Black.ttf"},
+		}},
 	{Name: "Montserrat", Slug: "montserrat", TTFFile: "Montserrat[wght].ttf", Kind: fonts.KindSans},
 	{Name: "Source Sans 3", Slug: "sourcesans3", TTFFile: "SourceSans3[wght].ttf", Kind: fonts.KindSans},
 	{Name: "IBM Plex Sans", Slug: "ibmplexsans", TTFFile: "IBMPlexSans[wdth,wght].ttf", Kind: fonts.KindSans},
@@ -141,7 +147,13 @@ var seeds = []seed{
 	{Name: "Source Code Pro", Slug: "sourcecodepro", TTFFile: "SourceCodePro[wght].ttf", Kind: fonts.KindMono},
 	{Name: "Space Mono", Slug: "spacemono", TTFFile: "SpaceMono-Regular.ttf", Kind: fonts.KindMono},
 	{Name: "Inconsolata", Slug: "inconsolata", TTFFile: "static/Inconsolata-Regular.ttf", Kind: fonts.KindMono},
-	{Name: "Roboto Mono", Slug: "robotomono", TTFFile: "RobotoMono[wght].ttf", Kind: fonts.KindMono},
+	// Roboto Mono's google/fonts directory holds two variable files and no
+	// static instance; its wght axis runs 100-700, so the bold is a position,
+	// not a file, and is baked out of the roman file at wght 700.
+	{Name: "Roboto Mono", Slug: "robotomono", TTFFile: "RobotoMono[wght].ttf", Kind: fonts.KindMono,
+		Styles: []style{
+			{Name: "Bold", File: "RobotoMono[wght].ttf", At: map[string]float64{"wght": 700}},
+		}},
 	{Name: "Karla", Slug: "karla", TTFFile: "Karla[wght].ttf", Kind: fonts.KindSans},
 	{Name: "Manrope", Slug: "manrope", TTFFile: "Manrope[wght].ttf", Kind: fonts.KindSans},
 	{Name: "Mulish", Slug: "mulish", TTFFile: "Mulish[wght].ttf", Kind: fonts.KindSans},

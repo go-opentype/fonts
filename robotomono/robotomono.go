@@ -9,10 +9,9 @@
 // License: OFL-1.1. Copyright 2015 The Roboto Mono Project Authors (https://github.com/googlefonts/robotomono)
 // Upstream: https://github.com/google/fonts/tree/main/ofl/robotomono
 //
-// Roboto Mono is a variable font upstream; the bundled .ttf is pinned at its
-// default master (static instance). go-opentype has no variable-font
-// support, so it always renders that default instance — OpenType
-// Variations axes are not applied.
+// Roboto Mono is a variable font upstream and the bundled robotomono.ttf is that
+// variable file. Face returns its default master; Font.Instance bakes any
+// other point on its axes into a static font.
 //
 // Importing this package links only Roboto Mono into your binary. No other
 // bundled family is compiled in unless you import its package too.
@@ -24,3 +23,10 @@ import _ "embed" // for the //go:embed directive below
 //
 //go:embed robotomono.ttf
 var TTF []byte
+
+// Bold holds the raw TrueType bytes of the bold face: a static
+// instance baked at wght 700 out of RobotoMono[wght].ttf, since upstream ships no file
+// for this weight, only the axis it sits on.
+//
+//go:embed robotomono-bold.ttf
+var Bold []byte
