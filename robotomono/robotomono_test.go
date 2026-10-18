@@ -34,6 +34,8 @@ func TestEveryFaceParses(t *testing.T) {
 		ttf  []byte
 	}{
 		{"Bold", Bold},
+		{"Italic", Italic},
+		{"BoldItalic", BoldItalic},
 	} {
 		f, err := opentype.Parse(c.ttf)
 		if err != nil {
@@ -57,6 +59,8 @@ func TestBakedFacesAreStatic(t *testing.T) {
 		ttf  []byte
 	}{
 		{"Bold", Bold},
+		{"Italic", Italic},
+		{"BoldItalic", BoldItalic},
 	} {
 		f, err := opentype.Parse(c.ttf)
 		if err != nil {

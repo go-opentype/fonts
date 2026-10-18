@@ -35,6 +35,9 @@ func TestEveryFaceParses(t *testing.T) {
 	}{
 		{"Bold", Bold},
 		{"Black", Black},
+		{"Italic", Italic},
+		{"BoldItalic", BoldItalic},
+		{"BlackItalic", BlackItalic},
 	} {
 		f, err := opentype.Parse(c.ttf)
 		if err != nil {

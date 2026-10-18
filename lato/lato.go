@@ -29,3 +29,18 @@ var Bold []byte
 //
 //go:embed lato-black.ttf
 var Black []byte
+
+// Italic holds the raw TrueType bytes of the italic face.
+//
+//go:embed lato-italic.ttf
+var Italic []byte
+
+// BoldItalic holds the raw TrueType bytes of the bold italic face.
+//
+//go:embed lato-bolditalic.ttf
+var BoldItalic []byte
+
+// BlackItalic holds the raw TrueType bytes of the blackitalic face.
+//
+//go:embed lato-blackitalic.ttf
+var BlackItalic []byte

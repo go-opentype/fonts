@@ -30,3 +30,17 @@ var TTF []byte
 //
 //go:embed robotomono-bold.ttf
 var Bold []byte
+
+// Italic holds the raw TrueType bytes of the italic face: a static
+// instance baked at wght 400 out of RobotoMono-Italic[wght].ttf, since upstream ships no file
+// for this weight, only the axis it sits on.
+//
+//go:embed robotomono-italic.ttf
+var Italic []byte
+
+// BoldItalic holds the raw TrueType bytes of the bold italic face: a static
+// instance baked at wght 700 out of RobotoMono-Italic[wght].ttf, since upstream ships no file
+// for this weight, only the axis it sits on.
+//
+//go:embed robotomono-bolditalic.ttf
+var BoldItalic []byte
