@@ -19,3 +19,13 @@ import _ "embed" // for the //go:embed directive below
 //
 //go:embed lato.ttf
 var TTF []byte
+
+// Bold holds the raw TrueType bytes of the bold face.
+//
+//go:embed lato-bold.ttf
+var Bold []byte
+
+// Black holds the raw TrueType bytes of the black face.
+//
+//go:embed lato-black.ttf
+var Black []byte
